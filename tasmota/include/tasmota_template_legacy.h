@@ -362,6 +362,8 @@ const uint16_t kGpioConvert[] PROGMEM = {
   AGPIO(GPIO_TX2X_TXD_BLACK), // TX20/TX23 Transmission Pin
   AGPIO(GPIO_RFSEND),         // RF transmitter
   AGPIO(GPIO_RFRECV),         // RF receiver
+  AGPIO(GPIO_RFDIOSEND),         // RF transmitter
+  AGPIO(GPIO_RFDIORECV),         // RF receiver
   AGPIO(GPIO_TUYA_TX),        // Tuya Serial interface
   AGPIO(GPIO_TUYA_RX),        // Tuya Serial interface
   AGPIO(GPIO_MGC3130_XFER),

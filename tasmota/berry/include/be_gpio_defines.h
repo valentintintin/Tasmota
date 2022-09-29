@@ -190,6 +190,8 @@ const be_const_member_t lv_gpio_constants[] = {
     { "RESET", (int32_t) GPIO_RESET },
     { "RFRECV", (int32_t) GPIO_RFRECV },
     { "RFSEND", (int32_t) GPIO_RFSEND },
+    { "RFDIORECV", (int32_t) GPIO_RFDIORECV },
+    { "RFDIOSEND", (int32_t) GPIO_RFDIOSEND },
     { "RF_SENSOR", (int32_t) GPIO_RF_SENSOR },
     { "RISING", RISING },
     { "ROT1A", (int32_t) GPIO_ROT1A },

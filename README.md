@@ -1,4 +1,7 @@
-![Tasmota logo](/tools/logo/TASMOTA_FullLogo_Vector.svg)
+![Tasmota logo](/tools/logo/TASMOTA_FullLogo_Vector.svg) 
+
+### FORK
+**Add library [DioRemote](https://github.com/guyou/DiOremote) for Rf Transceiver. Select pin "Rf Dio TX and use command `RfSendDio YOUR_CODE`**
 
 Alternative firmware for [ESP8266](https://en.wikipedia.org/wiki/ESP8266) and [ESP32](https://en.wikipedia.org/wiki/ESP32) based devices with **easy configuration using webUI, OTA updates, automation using timers or rules, expandability and entirely local control over MQTT, HTTP, Serial or KNX**.
 _Written for PlatformIO._

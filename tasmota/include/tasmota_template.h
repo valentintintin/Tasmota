@@ -40,6 +40,7 @@ enum UserSelectablePins {
   GPIO_OLED_RESET,                     // OLED Display Reset
   GPIO_IRSEND, GPIO_IRRECV,            // IR interface
   GPIO_RFSEND, GPIO_RFRECV,            // RF interface
+  GPIO_RFDIOSEND, GPIO_RFDIORECV,            // RF interface
   GPIO_DHT11, GPIO_DHT22, GPIO_SI7021, GPIO_DHT11_OUT,  // DHT11, DHT21, DHT22, AM2301, AM2302, AM2321
   GPIO_DSB, GPIO_DSB_OUT,              // DS18B20 or DS18S20
   GPIO_WS2812,                         // WS2812 Led string
@@ -281,6 +282,7 @@ const char kSensorNames[] PROGMEM =
   D_SENSOR_BACKLIGHT "|" D_SENSOR_DISP_RESET "|"
   D_SENSOR_IRSEND "|" D_SENSOR_IRRECV "|"
   D_SENSOR_RFSEND "|" D_SENSOR_RFRECV "|"
+  D_SENSOR_RFDIOSEND "|" D_SENSOR_RFDIORECV "|"
   D_SENSOR_DHT11 "|" D_SENSOR_AM2301 "|" D_SENSOR_SI7021 "|" D_SENSOR_DHT11 "_o|"
   D_SENSOR_DS18X20 "|" D_SENSOR_DS18X20 "_o|"
   D_SENSOR_WS2812 "|"
@@ -731,6 +733,10 @@ const uint16_t kGpioNiceList[] PROGMEM = {
 #ifdef USE_RC_SWITCH
   AGPIO(GPIO_RFSEND),         // RF transmitter
   AGPIO(GPIO_RFRECV),         // RF receiver
+#endif
+#ifdef USE_DIO_REMOTE
+  AGPIO(GPIO_RFDIOSEND),         // RF Dio transmitter
+  AGPIO(GPIO_RFDIORECV),         // RF Dio receiver
 #endif
 #ifdef USE_RF_SENSOR
   AGPIO(GPIO_RF_SENSOR),      // Rf receiver with sensor decoding
