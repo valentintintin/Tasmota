@@ -717,6 +717,8 @@
 #define D_SENSOR_TX2X_TX       "TX2x"
 #define D_SENSOR_RFSEND        "RF TX"
 #define D_SENSOR_RFRECV        "RF RX"
+#define D_SENSOR_RFDIOSEND        "RF Dio TX"
+#define D_SENSOR_RFDIORECV        "RF Dio RX"
 #define D_SENSOR_TUYA_TX       "Tuya TX"
 #define D_SENSOR_TUYA_RX       "Tuya RX"
 #define D_SENSOR_MGC3130_XFER  "MGC3130 XFR"
