@@ -1019,6 +1019,7 @@
 //#define USE_FTC532                               // Add support for FTC532 8-button touch controller (+0k6 code)
 
 //#define USE_RC_SWITCH                            // Add support for RF transceiver using library RcSwitch (+2k7 code, 460 iram)
+//#define USE_DIO_REMOTE                            // Add support for RF DIO transceiver using library DIORemote (+2k7 code, 460 iram)
 
 //#define USE_RF_SENSOR                            // Add support for RF sensor receiver (434MHz or 868MHz) (+0k8 code)
 //  #define USE_THEO_V2                            // Add support for decoding Theo V2 sensors as documented on https://sidweb.nl using 434MHz RF sensor receiver (+1k4 code)
