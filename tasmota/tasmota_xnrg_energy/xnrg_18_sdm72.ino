@@ -76,7 +76,7 @@ void Sdm72Every250ms(void)
     if (error) {
       AddLog(LOG_LEVEL_DEBUG, PSTR("SDM: SDM72 error %d"), error);
     } else {
-      Energy.data_valid[0] = 0;
+      Energy->data_valid[0] = 0;
 
       float value;
       ((uint8_t*)&value)[3] = buffer[3];   // Get float values
@@ -86,7 +86,7 @@ void Sdm72Every250ms(void)
 
       switch(Sdm72.read_state) {
         case 0:
-          Energy.active_power[0] = value;     // W
+          Energy->active_power[0] = value;     // W
           break;
 
         case 1:
@@ -103,18 +103,18 @@ void Sdm72Every250ms(void)
           break;
 
         case 4:
-          Energy.import_active[0] = value;    // kWh
+          Energy->import_active[0] = value;    // kWh
           break;
 
         case 5:
-          Energy.export_active[0] = value;    // kWh
+          Energy->export_active[0] = value;    // kWh
           break;
 #endif  //  SDM72_IMPEXP
       }
 
       ++Sdm72.read_state %= nitems(sdm72_register);
       if (0 == Sdm72.read_state && !isnan(Sdm72.total_active)) {
-        Energy.import_active[0] = Sdm72.total_active;
+        Energy->import_active[0] = Sdm72.total_active;
         EnergyUpdateTotal();
       }
     }
@@ -130,7 +130,7 @@ void Sdm72Every250ms(void)
 
 void Sdm72SnsInit(void)
 {
-  Sdm72Modbus = new TasmotaModbus(Pin(GPIO_SDM72_RX), Pin(GPIO_SDM72_TX));
+  Sdm72Modbus = new TasmotaModbus(Pin(GPIO_SDM72_RX), Pin(GPIO_SDM72_TX), Pin(GPIO_NRG_MBS_TX_ENA));
   uint8_t result = Sdm72Modbus->Begin(SDM72_SPEED);
   if (result) {
     if (2 == result) {
@@ -144,70 +144,33 @@ void Sdm72SnsInit(void)
 void Sdm72DrvInit(void)
 {
   if (PinUsed(GPIO_SDM72_RX) && PinUsed(GPIO_SDM72_TX)) {
-    Energy.voltage_available = false;
-    Energy.current_available = false;
+    Energy->voltage_available = false;
+    Energy->current_available = false;
     TasmotaGlobal.energy_driver = XNRG_18;
   }
 }
 
 #ifdef SDM72_IMPEXP
-
-/*
-#ifdef USE_WEBSERVER
-const char HTTP_ENERGY_SDM72[] PROGMEM =
-  "{s}" D_EXPORT_POWER "{m}%*_f " D_UNIT_WATT "{e}"
-  "{s}" D_IMPORT_POWER "{m}%*_f " D_UNIT_WATT "{e}";
-#endif  // USE_WEBSERVER
-
 void Sdm72Show(bool json) {
   if (isnan(Sdm72.total_active)) { return; }
 
   if (json) {
-     ResponseAppend_P(PSTR(",\"" D_JSON_EXPORT_POWER "\":%*_f,\"" D_JSON_IMPORT_POWER "\":%*_f"),
-      Settings->flag2.wattage_resolution, &Sdm72.export_power,
-      Settings->flag2.wattage_resolution, &Sdm72.import_power);
+    ResponseAppend_P(PSTR(",\"" D_JSON_EXPORT_POWER "\":%s"), EnergyFmt(&Sdm72.export_power, Settings->flag2.wattage_resolution));
+    ResponseAppend_P(PSTR(",\"" D_JSON_IMPORT_POWER "\":%s"), EnergyFmt(&Sdm72.import_power, Settings->flag2.wattage_resolution));
 #ifdef USE_WEBSERVER
   } else {
-    WSContentSend_PD(HTTP_ENERGY_SDM72,
-      Settings->flag2.wattage_resolution, &Sdm72.export_power,
-      Settings->flag2.wattage_resolution, &Sdm72.import_power);
+    WSContentSend_PD(HTTP_SNS_EXPORT_POWER, WebEnergyFmt(&Sdm72.export_power, Settings->flag2.wattage_resolution));
+    WSContentSend_PD(HTTP_SNS_IMPORT_POWER, WebEnergyFmt(&Sdm72.import_power, Settings->flag2.wattage_resolution));
 #endif  // USE_WEBSERVER
   }
 }
-*/
-
-#ifdef USE_WEBSERVER
-const char HTTP_ENERGY_SDM72[] PROGMEM =
-  "{s}" D_EXPORT_POWER "{m}%s" D_UNIT_WATT "{e}"
-  "{s}" D_IMPORT_POWER "{m}%s" D_UNIT_WATT "{e}";
-#endif  // USE_WEBSERVER
-
-void Sdm72Show(bool json) {
-  if (isnan(Sdm72.total_active)) { return; }
-
-  char value_chr[GUISZ];
-  char value2_chr[GUISZ];
-
-  if (json) {
-     ResponseAppend_P(PSTR(",\"" D_JSON_EXPORT_POWER "\":%s,\"" D_JSON_IMPORT_POWER "\":%s"),
-      EnergyFormat(value_chr, &Sdm72.export_power, Settings->flag2.wattage_resolution),
-      EnergyFormat(value2_chr, &Sdm72.import_power, Settings->flag2.wattage_resolution));
-#ifdef USE_WEBSERVER
-  } else {
-    WSContentSend_PD(HTTP_ENERGY_SDM72, WebEnergyFormat(value_chr, &Sdm72.export_power, Settings->flag2.wattage_resolution),
-                                        WebEnergyFormat(value2_chr, &Sdm72.import_power, Settings->flag2.wattage_resolution));
-
-#endif  // USE_WEBSERVER
-  }
-}
-
 #endif  // SDM72_IMPEXP
 
 /*********************************************************************************************\
  * Interface
 \*********************************************************************************************/
 
-bool Xnrg18(uint8_t function)
+bool Xnrg18(uint32_t function)
 {
   bool result = false;
 
@@ -220,11 +183,7 @@ bool Xnrg18(uint8_t function)
       Sdm72Show(1);
       break;
 #ifdef USE_WEBSERVER
-#ifdef USE_ENERGY_COLUMN_GUI
     case FUNC_WEB_COL_SENSOR:
-#else   // not USE_ENERGY_COLUMN_GUI
-    case FUNC_WEB_SENSOR:
-#endif  // USE_ENERGY_COLUMN_GUI
       Sdm72Show(0);
       break;
 #endif  // USE_WEBSERVER

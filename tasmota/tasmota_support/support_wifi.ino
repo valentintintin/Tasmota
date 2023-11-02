@@ -41,9 +41,10 @@ const uint8_t WIFI_CHECK_SEC = 20;         // seconds
 const uint8_t WIFI_RETRY_OFFSET_SEC = WIFI_RETRY_SECONDS;  // seconds
 
 #include <ESP8266WiFi.h>                   // Wifi, MQTT, Ota, WifiManager
-#if LWIP_IPV6
-#include <AddrList.h>                      // IPv6 DualStack
-#endif  // LWIP_IPV6=1
+#include "lwip/dns.h"
+#if ESP_IDF_VERSION_MAJOR >= 5
+  #include "esp_netif.h"
+#endif
 
 int WifiGetRssiAsQuality(int rssi) {
   int quality = 0;
@@ -200,21 +201,32 @@ void WiFiSetSleepMode(void)
       WiFi.setSleepMode(WIFI_MODEM_SLEEP);      // Sleep (Esp8288/Arduino core and sdk default)
     }
   }
-  WifiSetOutputPower();
 }
 
-void WifiBegin(uint8_t flag, uint8_t channel)
-{
+void WifiBegin(uint8_t flag, uint8_t channel) {
 #ifdef USE_EMULATION
   UdpDisconnect();
 #endif  // USE_EMULATION
 
   WiFi.persistent(false);   // Solve possible wifi init errors (re-add at 6.2.1.16 #4044, #4083)
+#if defined(USE_IPV6) && defined(ESP32)
+  WiFi.IPv6(true);
+#endif
+
+#ifdef USE_WIFI_RANGE_EXTENDER
+  if (WiFi.getMode() != WIFI_AP_STA || !RgxApUp()) {  // Preserve range extender connections (#17103)
+    WiFi.disconnect(true);  // Delete SDK wifi config
+    delay(200);
+    WifiSetMode(WIFI_STA);  // Disable AP mode
+  }
+#else
   WiFi.disconnect(true);    // Delete SDK wifi config
   delay(200);
-
   WifiSetMode(WIFI_STA);    // Disable AP mode
+#endif
+
   WiFiSetSleepMode();
+  WifiSetOutputPower();
 //  if (WiFi.getPhyMode() != WIFI_PHY_MODE_11N) { WiFi.setPhyMode(WIFI_PHY_MODE_11N); }  // B/G/N
 //  if (WiFi.getPhyMode() != WIFI_PHY_MODE_11G) { WiFi.setPhyMode(WIFI_PHY_MODE_11G); }  // B/G
 #ifdef ESP32
@@ -255,20 +267,6 @@ void WifiBegin(uint8_t flag, uint8_t channel)
   if (Settings->flag5.wait_for_wifi_result) {  // SetOption142 - (Wifi) Wait 1 second for wifi connection solving some FRITZ!Box modem issues (1)
     WiFi.waitForConnectResult(1000);  // https://github.com/arendst/Tasmota/issues/14985
   }
-
-#if LWIP_IPV6
-  for (bool configured = false; !configured;) {
-    uint16_t cfgcnt = 0;
-    for (auto addr : addrList) {
-      if ((configured = !addr.isLocal() && addr.isV6()) || cfgcnt==30) {
-        AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_WIFI "Got IPv6 global address %s"), addr.toString().c_str());
-        break;  // IPv6 is mandatory but stop after 15 seconds
-      }
-      delay(500);  // Loop until real IPv6 address is aquired or too many tries failed
-      cfgcnt++;
-    }
-  }
-#endif  // LWIP_IPV6=1
 }
 
 void WifiBeginAfterScan(void)
@@ -464,26 +462,360 @@ void WifiSetState(uint8_t state)
   }
 }
 
-#if LWIP_IPV6
-String WifiGetIPv6(void)
+/*****************************************************************************************************\
+ * IP detection revised for full IPv4 / IPv6 support
+ *
+ * In general, each interface (Wifi/Eth) can have 1x IPv4 and
+ * 2x IPv6 (Global routable address and Link-Local starting witn fe80:...)
+ *
+ * We always use an IPv4 address if one is assigned, and revert to
+ * IPv6 only on networks that are v6 only.
+ * Ethernet calls can be safely used even if the USE_ETHERNET is not enabled
+ *
+ * New APIs:
+ * - general form is:
+ *   `bool XXXGetIPYYY(IPAddress*)` returns `true` if the address exists and copies the address
+ *                                  if the pointer is non-null.
+ *   `bool XXXHasIPYYY()`           same as above but only returns `true` or `false`
+ *   `String XXXGetIPYYYStr()`      returns the IP as a `String` or empty `String` if none
+ *
+ *   `XXX` can be `Wifi` or `Eth`
+ *   `YYY` can be `` for any address, `v6` for IPv6 global address or `v6LinkLocal` for Link-local
+ *
+ * - Legacy `Wifi.localIP()` and `ETH.localIP()` always return IPv4 and nothing on IPv6 only networks
+ *
+ * - v4/v6:
+ *   `WifiGetIP`, `WifiGetIPStr`, `WifiHasIP`: get preferred v4/v6 address for Wifi
+ *   `EthernetGetIP`, `EthernetGetIPStr`, `EthernetHasIP`: get preferred v4/v6 for Ethernet
+ *
+ * - Main IP to be used dual stack v4/v6
+ *   `hasIP`, `IPGetListeningAddress`, `IPGetListeningAddressStr`: any IP to listen to for Web Server
+ *             IPv4 is always preferred, and Eth is preferred over Wifi.
+ *   `IPForUrl`: converts v4/v6 to use in URL, enclosing v6 in []
+ *
+ * - v6 only:
+ *    `WifiGetIPv6`, `WifiGetIPv6Str`, `WifiHasIPv6`
+ *    `WifiGetIPv6LinkLocal`, `WifiGetIPv6LinkLocalStr`
+ *    `EthernetGetIPv6, `EthernetHasIPv6`, `EthernetGetIPv6Str`
+ *    `EthernetGetIPv6LinkLocal`, `EthernetGetIPv6LinkLocalStr`
+ *
+ * - v4 only:
+ *    `WifiGetIPv4`, `WifiGetIPv4Str`, `WifiHasIPv4`
+ *    `EthernetGetIPv4`, `EthernetGetIPv4Str`, `EthernetHasIPv4`
+ *
+ * - DNS reporting actual values used (not the Settings):
+ *    `DNSGetIP(n)`, `DNSGetIPStr(n)` with n=`0`/`1` (same dns for Wifi and Eth)
+\*****************************************************************************************************/
+bool WifiGetIP(IPAddress *ip, bool exclude_ap = false);
+// IPv4 for Wifi
+// Returns only IPv6 global address (no loopback and no link-local)
+bool WifiGetIPv4(IPAddress *ip)
 {
-  for (auto a : addrList) {
-    if(!a.isLocal() && a.isV6()) return a.toString();
-  }
-  return "";
+  uint32_t wifi_uint = (uint32_t) WiFi.localIP();
+  if (ip != nullptr) { *ip = wifi_uint; }
+  return wifi_uint != 0;
 }
-#endif  // LWIP_IPV6=1
+bool WifiHasIPv4(void)
+{
+  return WifiGetIPv4(nullptr);
+}
+String WifiGetIPv4Str(void)
+{
+  IPAddress ip;
+  return WifiGetIPv4(&ip) ? ip.toString() : String();
+}
 
-// Check to see if we have any routable IP address
-bool WifiHasIP(void) {
-#ifdef LWIP2_IPV6
-  return !a.isLocal();
+bool EthernetGetIPv4(IPAddress *ip)
+{
+#if defined(ESP32) && CONFIG_IDF_TARGET_ESP32 && defined(USE_ETHERNET)
+  uint32_t wifi_uint = (uint32_t) EthernetLocalIP();
+  if (ip != nullptr) { *ip = wifi_uint; }
+  return wifi_uint != 0;
 #else
-  return (uint32_t)WiFi.localIP() != 0;
+  if (ip != nullptr) { *ip = (uint32_t)0; }
+  return false;
+#endif
+}
+bool EthernetHasIPv4(void)
+{
+  return EthernetGetIPv4(nullptr);
+}
+String EthernetGetIPv4Str(void)
+{
+  IPAddress ip;
+  return EthernetGetIPv4(&ip) ? ip.toString() : String();
+}
+
+#ifdef USE_IPV6
+//
+// Scan through all interfaces to find a global or local IPv6 address
+// Arg:
+//    is_local: is the address Link-Local (true) or Global (false)
+//    if_type: possible values are "st" for Wifi STA, "en" for Ethernet, "lo" for localhost (not useful)
+// Returns `true` if found
+bool WifiFindIPv6(IPAddress *ip, bool is_local, const char * if_type = "st") {
+  for (netif* intf = netif_list; intf != nullptr; intf = intf->next) {
+    if (intf->name[0] == if_type[0] && intf->name[1] == if_type[1]) {
+      for (uint32_t i = 0; i < LWIP_IPV6_NUM_ADDRESSES; i++) {
+        ip_addr_t *ipv6 = &intf->ip6_addr[i];
+        if (IP_IS_V6_VAL(*ipv6) && !ip_addr_isloopback(ipv6) && !ip_addr_isany(ipv6) && ((bool)ip_addr_islinklocal(ipv6) == is_local)) {
+          if (ip != nullptr) { *ip = *ipv6; }
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+
+// Returns only IPv6 global address (no loopback and no link-local)
+bool WifiGetIPv6(IPAddress *ip)
+{
+  return WifiFindIPv6(ip, false, "st");
+}
+bool WifiHasIPv6(void)
+{
+  return WifiGetIPv6(nullptr);
+}
+String WifiGetIPv6Str(void)
+{
+  IPAddress ip;
+  return WifiGetIPv6(&ip) ? ip.toString() : String();
+}
+
+bool WifiGetIPv6LinkLocal(IPAddress *ip)
+{
+  return WifiFindIPv6(ip, true, "st");
+}
+String WifiGetIPv6LinkLocalStr(void)
+{
+  IPAddress ip;
+  return WifiGetIPv6LinkLocal(&ip) ? ip.toString() : String();
+}
+
+
+// Returns only IPv6 global address (no loopback and no link-local)
+bool EthernetGetIPv6(IPAddress *ip)
+{
+  return WifiFindIPv6(ip, false, "en");
+}
+bool EthernetHasIPv6(void)
+{
+  return EthernetGetIPv6(nullptr);
+}
+String EthernetGetIPv6Str(void)
+{
+  IPAddress ip;
+  return EthernetGetIPv6(&ip) ? ip.toString() : String();
+}
+
+bool EthernetGetIPv6LinkLocal(IPAddress *ip)
+{
+  return WifiFindIPv6(ip, true, "en");
+}
+bool EthernetHasIPv6LinkLocal(void)
+{
+  return EthernetGetIPv6LinkLocal(nullptr);
+}
+String EthernetGetIPv6LinkLocalStr(void)
+{
+  IPAddress ip;
+  return EthernetGetIPv6LinkLocal(&ip) ? ip.toString() : String();
+}
+
+bool DNSGetIP(IPAddress *ip, uint32_t idx)
+{
+#ifdef ESP32
+  WiFi.scrubDNS();    // internal calls to reconnect can zero the DNS servers, restore the previous values
+#endif
+  const ip_addr_t *ip_dns = dns_getserver(idx);
+  if (!ip_addr_isany(ip_dns)) {
+    if (ip != nullptr) { *ip = *ip_dns; }
+    return true;
+  }
+  if (ip != nullptr) { *ip = *IP4_ADDR_ANY; }
+  return false;
+}
+String DNSGetIPStr(uint32_t idx)
+{
+  IPAddress ip;
+  return DNSGetIP(&ip, idx) ? ip.toString() : String(F("0.0.0.0"));
+}
+
+//
+#include "lwip/dns.h"
+void WifiDumpAddressesIPv6(void)
+{
+  for (netif* intf = netif_list; intf != nullptr; intf = intf->next) {
+    if (!ip_addr_isany_val(intf->ip_addr)) AddLog(LOG_LEVEL_DEBUG, "WIF: '%c%c' IPv4 %s", intf->name[0], intf->name[1], IPAddress(intf->ip_addr).toString().c_str());
+    for (uint32_t i = 0; i < LWIP_IPV6_NUM_ADDRESSES; i++) {
+      if (!ip_addr_isany_val(intf->ip6_addr[i]))
+        AddLog(LOG_LEVEL_DEBUG, "IP : '%c%c' IPv6 %s %s", intf->name[0], intf->name[1],
+                                IPAddress(intf->ip6_addr[i]).toString().c_str(),
+                                ip_addr_islinklocal(&intf->ip6_addr[i]) ? "local" : "");
+    }
+  }
+  AddLog(LOG_LEVEL_DEBUG, "IP : DNS: %s %s", IPAddress(dns_getserver(0)).toString().c_str(),  IPAddress(dns_getserver(1)).toString().c_str());
+  AddLog(LOG_LEVEL_DEBUG, "WIF: v4IP: %_I v6IP: %s mainIP: %s", (uint32_t) WiFi.localIP(), WifiGetIPv6Str().c_str(), WifiGetIPStr().c_str());
+#if defined(ESP32) && CONFIG_IDF_TARGET_ESP32 && defined(USE_ETHERNET)
+  AddLog(LOG_LEVEL_DEBUG, "ETH: v4IP %_I v6IP: %s mainIP: %s", (uint32_t) EthernetLocalIP(), EthernetGetIPv6Str().c_str(), EthernetGetIPStr().c_str());
+#endif
+  AddLog(LOG_LEVEL_DEBUG, "IP : ListeningIP %s", IPGetListeningAddressStr().c_str());
+}
+#endif  // USE_IPV6
+
+// Returns the IP address on which we listen (used for Web UI mainly)
+//
+// If IPv4 is set, it is preferred.
+// If only IPv6, return the routable global address
+bool IPGetListeningAddress(IPAddress * ip)
+{
+  if (ip == nullptr) return HasIP();    // no value added for this method if no parameter
+
+#ifdef USE_IPV6
+  // collect both Wifi and Eth IPs and choose an IPv4 if any (Eth has priority)
+  IPAddress ip_wifi;
+  bool has_wifi = WifiGetIP(&ip_wifi);
+
+#if defined(ESP32) && CONFIG_IDF_TARGET_ESP32 && defined(USE_ETHERNET)
+  IPAddress ip_eth;
+  bool has_eth = EthernetGetIP(&ip_eth);
+  if (has_wifi && has_eth) {
+    if (ip_eth.isV4()) { *ip = ip_eth; return true; }
+    if (ip_wifi.isV4()) { *ip = ip_wifi; return true; }
+    // both addresses are v6, return ETH
+    *ip = ip_eth;
+    return true;
+  }
+  // from here only wifi or eth may be valid
+  if (has_eth) { *ip = ip_eth; return true; }
+#endif
+
+  if (has_wifi) { *ip = ip_wifi; return true; }
+
+  *ip = IPAddress();
+  return false;
+#else // USE_IPV6
+#if defined(ESP32) && CONFIG_IDF_TARGET_ESP32 && defined(USE_ETHERNET)
+  if (EthernetGetIP(ip)) { return true; }
+#endif
+  if (WifiGetIP(ip)) { return true; }
+  *ip = IPAddress();
+  return false;
+#endif // USE_IPV6
+}
+
+String IPGetListeningAddressStr(void)
+{
+  IPAddress ip;
+  if (IPGetListeningAddress(&ip)) {
+    return ip.toString();
+  } else {
+    return String();
+  }
+}
+
+// Because of IPv6, we can't test an IP address agains (uint32_t)0L anymore
+// This test would work only for IPv4 assigned addresses.
+// We must now use the following instead
+inline bool IPIsValid(const IPAddress & ip)
+{
+#ifdef USE_IPV6
+  return !ip_addr_isany_val((const ip_addr_t &)ip);
+#else
+  return static_cast<uint32_t>(ip) != 0;
 #endif
 }
 
+// Because of IPv6, URL encoding of IP address needs to be adapted
+// IPv4: address is "x.x.x.x"
+// IPv6: address is enclosed in brackets "[x.x::x.x...]"
+String IPForUrl(const IPAddress & ip)
+{
+#ifdef USE_IPV6
+  if (ip.isV4()) {
+    return ip.toString().c_str();
+  } else {
+    String s('[');
+    s += ip.toString().c_str();
+    s += ']';
+    return s;
+  }
+#else
+  return ip.toString().c_str();
+#endif
+}
+
+// Check to see if we have any routable IP address
+// IPv4 has always priority
+// Copy the value of the IP if pointer provided (optional)
+// `exclude_ap` allows to exlude AP IP address and focus only on local STA
+bool WifiGetIP(IPAddress *ip, bool exclude_ap) {
+#ifdef ESP32
+  wifi_mode_t mode = WiFi.getMode();
+  if ((mode == WIFI_MODE_STA || mode == WIFI_MODE_APSTA) && (uint32_t)WiFi.localIP() != 0) {
+    if (ip != nullptr) { *ip = WiFi.localIP(); }
+    return true;
+  }
+  if (!exclude_ap && (mode == WIFI_MODE_AP || mode == WIFI_MODE_APSTA) && (uint32_t)WiFi.softAPIP() != 0) {
+    if (ip != nullptr) { *ip = WiFi.softAPIP(); }
+    return true;
+  }
+#else
+  WiFiMode_t mode = WiFi.getMode();
+  if ((mode == WIFI_STA || mode == WIFI_AP_STA) && (uint32_t)WiFi.localIP() != 0) {
+    if (ip != nullptr) { *ip = WiFi.localIP(); }
+    return true;
+  }
+  if (!exclude_ap && (mode == WIFI_AP || mode == WIFI_AP_STA) && (uint32_t)WiFi.softAPIP() != 0) {
+    if (ip != nullptr) { *ip = WiFi.softAPIP(); }
+    return true;
+  }
+#endif
+#ifdef USE_IPV6
+  IPAddress lip;
+  if (WifiGetIPv6(&lip)) {
+    if (ip != nullptr) { *ip = lip; }
+    return true;
+  }
+  if (ip != nullptr) { *ip = IPAddress(); }
+#endif // USE_IPV6
+  return false;
+}
+
+bool WifiHasIP(void) {
+  return WifiGetIP(nullptr);
+}
+
+String WifiGetIPStr(void)
+{
+  IPAddress ip;
+  return WifiGetIP(&ip) ? ip.toString() : String();
+}
+
+// Has a routable IP, whether IPv4 or IPv6, Wifi or Ethernet
+bool HasIP(void) {
+  if (WifiHasIP()) return true;
+#if defined(ESP32) && CONFIG_IDF_TARGET_ESP32 && defined(USE_ETHERNET)
+  if (EthernetHasIP()) return true;
+#endif
+  return false;
+}
+
 void WifiCheckIp(void) {
+#ifdef USE_IPV6
+  if (WL_CONNECTED == WiFi.status()) {
+#ifdef ESP32
+    if (!Wifi.ipv6_local_link_called) {
+      WiFi.enableIpV6();
+      Wifi.ipv6_local_link_called = true;
+      // AddLog(LOG_LEVEL_DEBUG, PSTR("WIF: calling enableIpV6"));
+    }
+#endif
+  }
+#endif // USE_IPV6
+
   if ((WL_CONNECTED == WiFi.status()) && WifiHasIP()) {
     WifiSetState(1);
     Wifi.counter = WIFI_CHECK_SEC;
@@ -636,16 +968,70 @@ int WifiState(void)
   return state;
 }
 
-String WifiGetOutputPower(void)
-{
-  char stemp1[TOPSZ];
-  dtostrfd((float)(Settings->wifi_output_power) / 10, 1, stemp1);
-  return String(stemp1);
+float WifiGetOutputPower(void) {
+  if (Settings->wifi_output_power) {
+    Wifi.last_tx_pwr = Settings->wifi_output_power;
+  }
+  return (float)(Wifi.last_tx_pwr) / 10;
 }
 
-void WifiSetOutputPower(void)
-{
-  WiFi.setOutputPower((float)(Settings->wifi_output_power) / 10);
+void WifiSetOutputPower(void) {
+  if (Settings->wifi_output_power) {
+    WiFi.setOutputPower((float)(Settings->wifi_output_power) / 10);
+  } else {
+    AddLog(LOG_LEVEL_DEBUG, PSTR("WIF: Dynamic Tx power enabled"));  // WifiPower 0
+  }
+}
+
+void WiFiSetTXpowerBasedOnRssi(void) {
+  // Dynamic WiFi transmit power based on RSSI lowering overall DC power usage.
+  // Original idea by ESPEasy (@TD-er)
+  if (!Settings->flag4.network_wifi || Settings->wifi_output_power) { return; }
+  const WiFiMode_t cur_mode = WiFi.getMode();
+  if (cur_mode == WIFI_OFF) { return; }
+
+  // Range ESP32  : 2dBm - 20dBm
+  // Range ESP8266: 0dBm - 20.5dBm
+  int max_tx_pwr = MAX_TX_PWR_DBM_11b;
+  int threshold = WIFI_SENSITIVITY_n;
+  int phy_mode = WiFi.getPhyMode();
+  switch (phy_mode) {
+    case 1:                  // 11b (WIFI_PHY_MODE_11B)
+      threshold = WIFI_SENSITIVITY_11b;
+      if (max_tx_pwr > MAX_TX_PWR_DBM_11b) max_tx_pwr = MAX_TX_PWR_DBM_11b;
+      break;
+    case 2:                  // 11bg (WIFI_PHY_MODE_11G)
+      threshold = WIFI_SENSITIVITY_54g;
+      if (max_tx_pwr > MAX_TX_PWR_DBM_54g) max_tx_pwr = MAX_TX_PWR_DBM_54g;
+      break;
+    case 3:                  // 11bgn (WIFI_PHY_MODE_11N)
+      threshold = WIFI_SENSITIVITY_n;
+      if (max_tx_pwr > MAX_TX_PWR_DBM_n) max_tx_pwr = MAX_TX_PWR_DBM_n;
+      break;
+  }
+  threshold += 30;           // Margin in dBm * 10 on top of threshold
+
+  // Assume AP sends with max set by ETSI standard.
+  // 2.4 GHz: 100 mWatt (20 dBm)
+  // US and some other countries allow 1000 mW (30 dBm)
+  int rssi = WiFi.RSSI() * 10;
+  int newrssi = rssi - 200;  // We cannot send with over 20 dBm, thus it makes no sense to force higher TX power all the time.
+
+  int min_tx_pwr = 0;
+  if (newrssi < threshold) {
+    min_tx_pwr = threshold - newrssi;
+  }
+  if (min_tx_pwr > max_tx_pwr) {
+    min_tx_pwr = max_tx_pwr;
+  }
+  WiFi.setOutputPower((float)min_tx_pwr / 10);
+  delay(Wifi.last_tx_pwr < min_tx_pwr);  // If increase the TX power, give power supply of the unit some rest
+/*
+  if (Wifi.last_tx_pwr != min_tx_pwr) {
+    AddLog(LOG_LEVEL_DEBUG, PSTR("WIF: TX power %d, Sensitivity %d, RSSI %d"), min_tx_pwr / 10, threshold / 10, rssi / 10);
+  }
+*/
+  Wifi.last_tx_pwr = min_tx_pwr;
 }
 
 /*
@@ -682,12 +1068,23 @@ void WifiEnable(void) {
 //#include <sntp.h>                       // sntp_servermode_dhcp()
 //#endif  // ESP8266
 
+#ifdef ESP32
+void WifiEvents(arduino_event_t *event);
+#endif
+
 void WifiConnect(void)
 {
   if (!Settings->flag4.network_wifi) { return; }
 
+#if defined(ESP32) && !defined(FIRMWARE_MINIMAL)
+  static bool wifi_event_registered = false;
+  if (!wifi_event_registered) {
+    WiFi.onEvent(WifiEvents);   // register event listener only once
+    wifi_event_registered = true;
+  }
+#endif // ESP32
   WifiSetState(0);
-  WifiSetOutputPower();
+//  WifiSetOutputPower();
 
 //#ifdef ESP8266
   // https://github.com/arendst/Tasmota/issues/16061#issuecomment-1216970170
@@ -758,7 +1155,7 @@ void EspRestart(void)
   WifiShutdown(true);
   CrashDumpClear();           // Clear the stack dump in RTC
 
-  if (TasmotaGlobal.restart_halt) {
+  if (TasmotaGlobal.restart_halt) {  // Restart 2
     while (1) {
       OsWatchLoop();          // Feed OsWatch timer to prevent restart
       SetLedLink(1);          // Wifi led on
@@ -766,7 +1163,11 @@ void EspRestart(void)
       SetLedLink(0);          // Wifi led off
       delay(800);             // Satisfy SDK
     }
-  } else {
+  }
+  else if (TasmotaGlobal.restart_deepsleep) {  // Restart 9
+    ESP.deepSleep(0);         // Deep sleep mode with only hardware triggered wake up
+  }
+  else {
     ESP_Restart();
   }
 }
@@ -821,34 +1222,73 @@ void wifiKeepAlive(void) {
 }
 #endif  // ESP8266
 
-bool WifiHostByName(const char* aHostname, IPAddress& aResult) {
-#ifdef ESP8266
-  if (WiFi.hostByName(aHostname, aResult, Settings->dns_timeout)) {
-    // Host name resolved
-    if (0xFFFFFFFF != (uint32_t)aResult) {
-      return true;
-    }
+// expose a function to be called by WiFi32
+int32_t WifiDNSGetTimeout(void) {
+  return Settings->dns_timeout;
+}
+// read Settings for DNS IPv6 priority
+bool WifiDNSGetIPv6Priority(void) {
+#ifdef USE_IPV6
+  // we prioritize IPv6 only if a global IPv6 address is available, otherwise revert to IPv4 if we have one as well
+  // Any change in logic needs to clear the DNS cache
+  static bool had_v6prio = false;
+
+  bool has_v4 = WifiHasIPv4() || EthernetHasIPv4();
+  bool has_v6 = WifiHasIPv6() || EthernetHasIPv6();
+  bool v6prio = Settings->flag6.dns_ipv6_priority;
+
+  if (has_v4 && !has_v6) {
+    v6prio = false;   // revert to IPv4 first
+  } else if (has_v6 && !has_v4) {
+    v6prio = true;    // only IPv6 is available
   }
-#else
-  // DnsClient can't do one-shot mDNS queries so use WiFi.hostByName() for *.local
-  size_t hostname_len = strlen(aHostname);
-  if (strstr_P(aHostname, PSTR(".local")) == &aHostname[hostname_len] - 6) {
-    if (WiFi.hostByName(aHostname, aResult)) {
-      // Host name resolved
-      if (0xFFFFFFFF != (uint32_t)aResult) {
-        return true;
-      }
-    }
-  } else {
-    // Use this instead of WiFi.hostByName or connect(host_name,.. to block less if DNS server is not found
-    uint32_t dns_address = (!TasmotaGlobal.global_state.eth_down) ? Settings->eth_ipv4_address[3] : Settings->ipv4_address[3];
-    DnsClient.begin((IPAddress)dns_address);
-    if (1 == DnsClient.getHostByName(aHostname, aResult)) {
-      return true;
-    }
+
+  // any change of state requires a dns cache clear
+  if (had_v6prio != v6prio) {
+#ifdef ESP32
+    dns_clear_cache();    // this function doesn't exist in LWIP used by ESP8266
+#endif
+    had_v6prio = v6prio;
+  }
+
+  return v6prio;
+#endif // USE_IPV6
+  return false;
+}
+
+bool WifiHostByName(const char* aHostname, IPAddress& aResult) {
+#ifdef USE_IPV6
+#if ESP_IDF_VERSION_MAJOR >= 5
+  // try converting directly to IP
+  if (aResult.fromString(aHostname)) {
+    return true;   // we're done
   }
 #endif
-  AddLog(LOG_LEVEL_DEBUG, PSTR("DNS: Unable to resolve '%s'"), aHostname);
+#endif // USE_IPV6
+
+  uint32_t dns_start = millis();
+  bool success = WiFi.hostByName(aHostname, aResult, Settings->dns_timeout);
+  uint32_t dns_end = millis();
+  if (success) {
+    // Host name resolved
+#ifdef USE_IPV6
+#if ESP_IDF_VERSION_MAJOR >= 5
+    // check if there is a zone-id
+    // look for '%' in string
+    const char *s = aHostname;
+    while (*s && *s != '%') { s++; }
+    if (*s == '%') {
+        // we have a zone id
+        aResult.setZone(netif_name_to_index(s + 1));
+    }
+#endif
+#endif // USE_IPV6
+    if (0xFFFFFFFF != (uint32_t)aResult) {
+      AddLog(LOG_LEVEL_DEBUG_MORE, PSTR(D_LOG_WIFI "DNS resolved '%s' (%s) in %i ms"), aHostname, aResult.toString().c_str(), dns_end - dns_start);
+      return true;
+    }
+  }
+  AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_WIFI "DNS failed for %s after %i ms"), aHostname, dns_end - dns_start);
   return false;
 }
 
@@ -902,13 +1342,14 @@ uint64_t WifiGetNtp(void) {
 
   IPAddress time_server_ip;
 
-  char fallback_ntp_server[16];
-  snprintf_P(fallback_ntp_server, sizeof(fallback_ntp_server), PSTR("%d.pool.ntp.org"), random(0,3));
+  char fallback_ntp_server[2][32];
+  ext_snprintf_P(fallback_ntp_server[0], sizeof(fallback_ntp_server[0]), PSTR("%_I"), Settings->ipv4_address[1]);  // #17984
+  ext_snprintf_P(fallback_ntp_server[1], sizeof(fallback_ntp_server[1]), PSTR("%d.pool.ntp.org"), random(0,3));
 
   char* ntp_server;
-  for (uint32_t i = 0; i <= MAX_NTP_SERVERS; i++) {
-    if (ntp_server_id > MAX_NTP_SERVERS) { ntp_server_id = 0; }
-    ntp_server = (ntp_server_id < MAX_NTP_SERVERS) ? SettingsText(SET_NTPSERVER1 + ntp_server_id) : fallback_ntp_server;
+  for (uint32_t i = 0; i < MAX_NTP_SERVERS +2; i++) {
+    if (ntp_server_id >= MAX_NTP_SERVERS +2) { ntp_server_id = 0; }
+    ntp_server = (ntp_server_id < MAX_NTP_SERVERS) ? SettingsText(SET_NTPSERVER1 + ntp_server_id) : fallback_ntp_server[ntp_server_id - MAX_NTP_SERVERS];
     if (strlen(ntp_server)) {
       break;
     }
@@ -1000,3 +1441,50 @@ uint64_t WifiGetNtp(void) {
   ntp_server_id++;                                  // Next server next time
   return 0;
 }
+
+// --------------------------------------------------------------------------------
+// Respond to some Arduino/esp-idf events for better IPv6 support
+// --------------------------------------------------------------------------------
+#ifdef ESP32
+// typedef void (*WiFiEventSysCb)(arduino_event_t *event);
+void WifiEvents(arduino_event_t *event) {
+  switch (event->event_id) {
+
+#ifdef USE_IPV6
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP6:
+    {
+      ip_addr_t ip_addr6;
+      ip_addr_copy_from_ip6(ip_addr6, event->event_info.got_ip6.ip6_info.ip);
+      IPAddress addr(ip_addr6);
+      AddLog(LOG_LEVEL_DEBUG, PSTR("%s: IPv6 %s %s"),
+             event->event_id == ARDUINO_EVENT_ETH_GOT_IP6 ? "ETH" : "WIF",
+             addr.isLocal() ? PSTR("Local") : PSTR("Global"), addr.toString().c_str());
+    }
+    break;
+#endif // USE_IPV6
+    case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+    {
+      ip_addr_t ip_addr4;
+      ip_addr_copy_from_ip4(ip_addr4, event->event_info.got_ip.ip_info.ip);
+      AddLog(LOG_LEVEL_DEBUG, PSTR("WIF: IPv4 %_I, mask %_I, gateway %_I"),
+              event->event_info.got_ip.ip_info.ip.addr,
+              event->event_info.got_ip.ip_info.netmask.addr,
+              event->event_info.got_ip.ip_info.gw.addr);
+    }
+    break;
+
+    case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+      // AddLog(LOG_LEVEL_DEBUG, PSTR("WIF: Received ARDUINO_EVENT_WIFI_STA_CONNECTED"));
+      Wifi.ipv6_local_link_called = false;    // not sure if this is needed, make sure link-local is restored at each reconnect
+      break;
+    case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+    case ARDUINO_EVENT_WIFI_STA_AUTHMODE_CHANGE:
+      Wifi.ipv6_local_link_called = false;
+      break;
+
+    default:
+      break;
+  }
+  WiFi.scrubDNS();    // internal calls to reconnect can zero the DNS servers, restore the previous values
+}
+#endif // ESP32

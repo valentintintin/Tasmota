@@ -5,8 +5,8 @@
 #include "l3subband.h"
 
 /* This is table B.9: coefficients for aliasing reduction */
-#define MDCT_CA(coef)	(int32_t)(coef / sqrt(1.0 + (coef * coef)) * 0x7fffffff)
-#define MDCT_CS(coef)	(int32_t)(1.0  / sqrt(1.0 + (coef * coef)) * 0x7fffffff)
+#define MDCT_CA(coef)	(int)(coef / sqrt(1.0 + (coef * coef)) * 0x7fffffff)
+#define MDCT_CS(coef)	(int)(1.0  / sqrt(1.0 + (coef * coef)) * 0x7fffffff)
 
 #define MDCT_CA0	MDCT_CA(-0.6)
 #define MDCT_CA1	MDCT_CA(-0.535)
@@ -38,7 +38,7 @@ void shine_mdct_initialise(shine_global_config *config) {
     for(k=36; k--; )
       /* combine window and mdct coefficients into a single table */
       /* scale and convert to fixed point before storing */
-      config->mdct.cos_l[m][k] = (int32_t)(sin(PI36*(k+0.5))
+      config->mdct.cos_l[m][k] = (int)(sin(PI36*(k+0.5))
                                       * cos((PI/72)*(2*k+19)*(2*m+1)) * 0x7fffffff);
 }
 
@@ -50,17 +50,17 @@ void shine_mdct_sub(shine_global_config *config, int stride) {
   /* note. we wish to access the array 'config->mdct_freq[2][2][576]' as
    * [2][2][32][18]. (32*18=576),
    */
-  int32_t (*mdct_enc)[18];
+  int (*mdct_enc)[18];
 
   int  ch,gr,band,j,k;
-  int32_t mdct_in[36];
+  int mdct_in[36];
 
   for(ch=config->wave.channels; ch--; )
   {
     for(gr=0; gr<config->mpeg.granules_per_frame; gr++)
     {
       /* set up pointer to the part of config->mdct_freq we're using */
-      mdct_enc = (int32_t (*)[18]) config->mdct_freq[ch][gr];
+      mdct_enc = (int (*)[18]) config->mdct_freq[ch][gr];
 
       /* polyphase filtering */
       for(k=0; k<18; k+=2)
@@ -91,39 +91,39 @@ void shine_mdct_sub(shine_global_config *config, int stride) {
 
         for(k=18; k--; )
         {
-		  int32_t vm;
+		  int vm;
 #ifdef __BORLANDC__
 		  uint32_t vm_lo;
 #else
 		  uint32_t vm_lo __attribute__((unused));
 #endif
 
-          mul0(vm, vm_lo, mdct_in[35], config->mdct.cos_l[k][35]);
+          asm_mul0(vm, vm_lo, mdct_in[35], config->mdct.cos_l[k][35]);
           for(j=35; j; j-=7) {
-            muladd(vm, vm_lo, mdct_in[j-1], config->mdct.cos_l[k][j-1]);
-            muladd(vm, vm_lo, mdct_in[j-2], config->mdct.cos_l[k][j-2]);
-            muladd(vm, vm_lo, mdct_in[j-3], config->mdct.cos_l[k][j-3]);
-            muladd(vm, vm_lo, mdct_in[j-4], config->mdct.cos_l[k][j-4]);
-            muladd(vm, vm_lo, mdct_in[j-5], config->mdct.cos_l[k][j-5]);
-            muladd(vm, vm_lo, mdct_in[j-6], config->mdct.cos_l[k][j-6]);
-            muladd(vm, vm_lo, mdct_in[j-7], config->mdct.cos_l[k][j-7]);
+            asm_muladd(vm, vm_lo, mdct_in[j-1], config->mdct.cos_l[k][j-1]);
+            asm_muladd(vm, vm_lo, mdct_in[j-2], config->mdct.cos_l[k][j-2]);
+            asm_muladd(vm, vm_lo, mdct_in[j-3], config->mdct.cos_l[k][j-3]);
+            asm_muladd(vm, vm_lo, mdct_in[j-4], config->mdct.cos_l[k][j-4]);
+            asm_muladd(vm, vm_lo, mdct_in[j-5], config->mdct.cos_l[k][j-5]);
+            asm_muladd(vm, vm_lo, mdct_in[j-6], config->mdct.cos_l[k][j-6]);
+            asm_muladd(vm, vm_lo, mdct_in[j-7], config->mdct.cos_l[k][j-7]);
           }
-          mulz(vm, vm_lo);
+          asm_mulz(vm, vm_lo);
           mdct_enc[band][k] = vm;
         }
 
         /* Perform aliasing reduction butterfly */
-        asm ("#cmuls:");
+        asm ("#asm_cmuls:");
         if (band != 0)
         {
-          cmuls(mdct_enc[band][0], mdct_enc[band-1][17-0], mdct_enc[band][0], mdct_enc[band-1][17-0], MDCT_CS0, MDCT_CA0);
-          cmuls(mdct_enc[band][1], mdct_enc[band-1][17-1], mdct_enc[band][1], mdct_enc[band-1][17-1], MDCT_CS1, MDCT_CA1);
-          cmuls(mdct_enc[band][2], mdct_enc[band-1][17-2], mdct_enc[band][2], mdct_enc[band-1][17-2], MDCT_CS2, MDCT_CA2);
-          cmuls(mdct_enc[band][3], mdct_enc[band-1][17-3], mdct_enc[band][3], mdct_enc[band-1][17-3], MDCT_CS3, MDCT_CA3);
-          cmuls(mdct_enc[band][4], mdct_enc[band-1][17-4], mdct_enc[band][4], mdct_enc[band-1][17-4], MDCT_CS4, MDCT_CA4);
-          cmuls(mdct_enc[band][5], mdct_enc[band-1][17-5], mdct_enc[band][5], mdct_enc[band-1][17-5], MDCT_CS5, MDCT_CA5);
-          cmuls(mdct_enc[band][6], mdct_enc[band-1][17-6], mdct_enc[band][6], mdct_enc[band-1][17-6], MDCT_CS6, MDCT_CA6);
-          cmuls(mdct_enc[band][7], mdct_enc[band-1][17-7], mdct_enc[band][7], mdct_enc[band-1][17-7], MDCT_CS7, MDCT_CA7);
+          asm_cmuls(mdct_enc[band][0], mdct_enc[band-1][17-0], mdct_enc[band][0], mdct_enc[band-1][17-0], MDCT_CS0, MDCT_CA0);
+          asm_cmuls(mdct_enc[band][1], mdct_enc[band-1][17-1], mdct_enc[band][1], mdct_enc[band-1][17-1], MDCT_CS1, MDCT_CA1);
+          asm_cmuls(mdct_enc[band][2], mdct_enc[band-1][17-2], mdct_enc[band][2], mdct_enc[band-1][17-2], MDCT_CS2, MDCT_CA2);
+          asm_cmuls(mdct_enc[band][3], mdct_enc[band-1][17-3], mdct_enc[band][3], mdct_enc[band-1][17-3], MDCT_CS3, MDCT_CA3);
+          asm_cmuls(mdct_enc[band][4], mdct_enc[band-1][17-4], mdct_enc[band][4], mdct_enc[band-1][17-4], MDCT_CS4, MDCT_CA4);
+          asm_cmuls(mdct_enc[band][5], mdct_enc[band-1][17-5], mdct_enc[band][5], mdct_enc[band-1][17-5], MDCT_CS5, MDCT_CA5);
+          asm_cmuls(mdct_enc[band][6], mdct_enc[band-1][17-6], mdct_enc[band][6], mdct_enc[band-1][17-6], MDCT_CS6, MDCT_CA6);
+          asm_cmuls(mdct_enc[band][7], mdct_enc[band-1][17-7], mdct_enc[band][7], mdct_enc[band-1][17-7], MDCT_CS7, MDCT_CA7);
         }
       }
     }

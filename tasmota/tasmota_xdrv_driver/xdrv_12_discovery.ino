@@ -88,7 +88,7 @@ void TasDiscoverMessage(void) {
                    SettingsText(SET_MQTTPREFIX2),
                    SettingsText(SET_MQTTPREFIX3));
 
-  uint8_t light_idx = MAX_RELAYS + 1;                          // Will store the starting position of the lights
+  uint8_t light_idx = MAX_RELAYS_SET + 1;                      // Will store the starting position of the lights
   uint8_t light_subtype = 0;
   bool light_controller_isCTRGBLinked = false;
 #ifdef USE_LIGHT
@@ -107,24 +107,25 @@ void TasDiscoverMessage(void) {
   }
 #endif  // USE_LIGHT
 
-  uint16_t Relay[MAX_RELAYS] = { 0 };                          // Base array to store the relay type
-  uint16_t Shutter[MAX_RELAYS] = { 0 };                        // Array to store a temp list for shutters
-  for (uint32_t i = 0; i < MAX_RELAYS; i++) {
-    if (i < TasmotaGlobal.devices_present) {
+  uint16_t Relay[MAX_RELAYS_SET] = { 0 };                      // Base array to store the relay type
+  uint16_t Shutter[MAX_RELAYS_SET] = { 0 };                    // Array to store a temp list for shutters
 
 #ifdef USE_SHUTTER
-      if (Settings->flag3.shutter_mode) {
-        for (uint32_t k = 0; k < MAX_SHUTTERS; k++) {
-          if (Settings->shutter_startrelay[k] > 0) {
-            Shutter[Settings->shutter_startrelay[k]-1] = Shutter[Settings->shutter_startrelay[k]] = 1;
-          } else {
-            // terminate loop at first INVALID Settings->shutter_startrelay[i].
-            break;
-          }
-        }
+  if (Settings->flag3.shutter_mode) {
+    for (uint32_t k = 0; k < TasmotaGlobal.shutters_present; k++) {
+      uint8_t sr = ShutterGetStartRelay(k);
+      if (sr > 0) {
+        Shutter[sr-1] = Shutter[sr] = 1;
+      } else {
+        // terminate loop at first INVALID ShutterGetStartRelay(k).
+        break;
       }
+    }
+  }
 #endif  // USE_SHUTTER
 
+  for (uint32_t i = 0; i < MAX_RELAYS_SET; i++) {
+    if (i < TasmotaGlobal.devices_present) {
       if (Shutter[i] != 0) {                                   // Check if there are shutters present
         Relay[i] = 3;                                          // Relay is a shutter
       } else {
@@ -144,18 +145,18 @@ void TasDiscoverMessage(void) {
                         "\"swc\":["));                         // Switch modes (start)
 
   // Enable Discovery for Switches only if SetOption114 is enabled
-  for (uint32_t i = 0; i < MAX_SWITCHES; i++) {
-    ResponseAppend_P(PSTR("%s%d"), (i > 0 ? "," : ""), (PinUsed(GPIO_SWT1, i) && Settings->flag5.mqtt_switches) ? Settings->switchmode[i] : -1);
+  for (uint32_t i = 0; i < MAX_SWITCHES_SET; i++) {
+    ResponseAppend_P(PSTR("%s%d"), (i > 0 ? "," : ""), (SwitchUsed(i) && Settings->flag5.mqtt_switches) ? Settings->switchmode[i] : -1);
   }
 
   ResponseAppend_P(PSTR("],"                                   // Switch modes (end)
                         "\"swn\":["));                         // Switch names (start)
 
   // Enable Discovery for Switches only if SetOption114 is enabled
-  for (uint32_t i = 0; i < MAX_SWITCHES; i++) {
+  for (uint32_t i = 0; i < MAX_SWITCHES_SET; i++) {
     char sname[TOPSZ];
     snprintf_P(sname, sizeof(sname), PSTR("\"%s\""), GetSwitchText(i).c_str());
-    ResponseAppend_P(PSTR("%s%s"), (i > 0 ? "," : ""), (PinUsed(GPIO_SWT1, i) && Settings->flag5.mqtt_switches) ? sname : PSTR("null"));
+    ResponseAppend_P(PSTR("%s%s"), (i > 0 ? "," : ""), (SwitchUsed(i) && Settings->flag5.mqtt_switches) ? sname : PSTR("null"));
   }
 
   ResponseAppend_P(PSTR("],"                                   // Switch names (end)
@@ -163,11 +164,11 @@ void TasDiscoverMessage(void) {
 
   bool SerialButton = false;
   // Enable Discovery for Buttons only if SetOption73 is enabled
-  for (uint32_t i = 0; i < MAX_KEYS; i++) {
+  for (uint32_t i = 0; i < MAX_KEYS_SET; i++) {
 #ifdef ESP8266
     SerialButton = ((0 == i) && (SONOFF_DUAL == TasmotaGlobal.module_type ));
 #endif  // ESP8266
-    ResponseAppend_P(PSTR("%s%d"), (i > 0 ? "," : ""), (SerialButton ? 1 : (PinUsed(GPIO_KEY1, i)) && Settings->flag3.mqtt_buttons));
+    ResponseAppend_P(PSTR("%s%d"), (i > 0 ? "," : ""), (SerialButton ? 1 : (ButtonUsed(i)) && Settings->flag3.mqtt_buttons));
   }
 
   ResponseAppend_P(PSTR("],"                                   // Button flag (end)
@@ -184,6 +185,8 @@ void TasDiscoverMessage(void) {
                                 "\"117\":%d},"
                         "\"lk\":%d,"                           // Light CTRGB linked
                         "\"lt_st\":%d,"                        // Light SubType
+                        "\"bat\":%d,"                          // Battery operates yes/no
+                        "\"dslp\":%d,"                         // Deepsleep configured yes/no
                         "\"sho\":["),                          // Shutter Options (start)
                         Settings->flag.mqtt_response,
                         Settings->flag.button_swap,
@@ -197,11 +200,14 @@ void TasDiscoverMessage(void) {
                         Settings->flag5.mqtt_switches,
                         Settings->flag5.fade_fixed_duration,
                         light_controller_isCTRGBLinked,
-                        light_subtype);
+                        light_subtype,
+                        (Settings->battery_level_percent == 101) ? 0 : 1,
+                        (Settings->deepsleep == 0) ? 0 : 1
+                        );
 
-  for (uint32_t i = 0; i < MAX_SHUTTERS; i++) {
+  for (uint32_t i = 0; i < TasmotaGlobal.shutters_present; i++) {
 #ifdef USE_SHUTTER
-    ResponseAppend_P(PSTR("%s%d"), (i > 0 ? "," : ""), Settings->shutter_options[i]);
+    ResponseAppend_P(PSTR("%s%d"), (i > 0 ? "," : ""), ShutterGetOptions(i));
 #else
     ResponseAppend_P(PSTR("%s0"), (i > 0 ? "," : ""));
 #endif  // USE_SHUTTER
@@ -209,12 +215,12 @@ void TasDiscoverMessage(void) {
 
   ResponseAppend_P(PSTR("],"                                   // Shutter Options (end)
                         "\"sht\":["));                         // Shutter Tilt (start)
-  for (uint32_t i = 0; i < MAX_SHUTTERS; i++) {
+  for (uint32_t i = 0; i < TasmotaGlobal.shutters_present; i++) {
 #ifdef USE_SHUTTER
     ResponseAppend_P(PSTR("%s[%d,%d,%d]"), (i > 0 ? "," : ""),
-                          Settings->shutter_tilt_config[0][i],
-                          Settings->shutter_tilt_config[1][i],
-                          Settings->shutter_tilt_config[2][i]);
+                          ShutterGetTiltConfig(0,i),
+                          ShutterGetTiltConfig(1,i),
+                          ShutterGetTiltConfig(2,i));
 #else
     ResponseAppend_P(PSTR("%s[0,0,0]"), (i > 0 ? "," : ""));
 #endif  // USE_SHUTTER
@@ -298,7 +304,7 @@ void CmndTasDiscover(void) {
  * Interface
 \*********************************************************************************************/
 
-bool Xdrv12(uint8_t function) {
+bool Xdrv12(uint32_t function) {
   bool result = false;
 
   if (Settings->flag.mqtt_enabled) {                           // SetOption3 - Enable MQTT

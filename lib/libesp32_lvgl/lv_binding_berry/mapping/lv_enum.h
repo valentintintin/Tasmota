@@ -12,6 +12,8 @@ anim_path_ease_out=&lv_anim_path_ease_out
 anim_path_linear=&lv_anim_path_linear
 anim_path_overshoot=&lv_anim_path_overshoot
 anim_path_step=&lv_anim_path_step
+LV_LAYOUT_GRID=>be_LV_LAYOUT_GRID
+LV_LAYOUT_FLEX=>be_LV_LAYOUT_FLEX
 
 // ======================================================================
 // Colors
@@ -706,6 +708,7 @@ LV_STYLE_TEXT_LINE_SPACE
 LV_STYLE_TEXT_DECOR
 LV_STYLE_TEXT_ALIGN
 LV_STYLE_OPA
+LV_STYLE_OPA_LAYERED
 LV_STYLE_COLOR_FILTER_DSC
 LV_STYLE_COLOR_FILTER_OPA
 LV_STYLE_ANIM

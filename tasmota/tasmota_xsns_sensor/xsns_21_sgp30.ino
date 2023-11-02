@@ -1,7 +1,7 @@
 /*
   xsns_21_sgp30.ino - SGP30 gas and air quality sensor support for Tasmota
 
-  Copyright (C) 2021  Theo Arends
+  Copyright (C) 2021  Gerhard Mutz
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -108,8 +108,6 @@ const char HTTP_SNS_SGP30[] PROGMEM =
 const char HTTP_SNS_AHUM[] PROGMEM = "{s}SGP30 Abs Humidity{m}%s g/m3{e}";
 #endif
 
-#define D_JSON_AHUM "aHumidity"
-
 void Sgp30Show(bool json)
 {
   if (sgp30_ready) {
@@ -143,7 +141,7 @@ void Sgp30Show(bool json)
  * Interface
 \*********************************************************************************************/
 
-bool Xsns21(uint8_t function)
+bool Xsns21(uint32_t function)
 {
   if (!I2cEnabled(XI2C_18)) { return false; }
 

@@ -148,7 +148,7 @@ void SonoffScShow(bool json)
  * Interface
 \*********************************************************************************************/
 
-bool Xsns04(uint8_t function)
+bool Xsns04(uint32_t function)
 {
   bool result = false;
 
@@ -164,6 +164,9 @@ bool Xsns04(uint8_t function)
 #endif  // USE_WEBSERVER
       case FUNC_INIT:
         SonoffScInit();
+        break;
+      case FUNC_PRE_INIT:
+        SetSerial(19200, TS_SERIAL_8N1);
         break;
     }
   }

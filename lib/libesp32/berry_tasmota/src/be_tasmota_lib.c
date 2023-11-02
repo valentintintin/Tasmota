@@ -5,6 +5,7 @@
  *******************************************************************/
 #include "be_constobj.h"
 #include "be_ctypes.h"
+#include "be_mapping.h"
 
 extern struct TasmotaGlobal_t TasmotaGlobal;
 extern struct TSettings * Settings;
@@ -21,18 +22,23 @@ extern int l_getoption(bvm *vm);
 extern int l_millis(bvm *vm);
 extern int l_timereached(bvm *vm);
 extern int l_rtc(bvm *vm);
+extern int l_rtc_utc(bvm *vm);
 extern int l_time_dump(bvm *vm);
 extern int l_strftime(bvm *vm);
 extern int l_strptime(bvm *vm);
 extern int l_memory(bvm *vm);
 extern int l_wifi(bvm *vm);
 extern int l_eth(bvm *vm);
+extern int l_hostname(bvm *vm);
 extern int l_yield(bvm *vm);
 extern int l_delay(bvm *vm);
+extern int l_delay_microseconds(bvm *vm);
 extern int l_scaleuint(bvm *vm);
 extern int l_logInfo(bvm *vm);
+extern int l_loglevel(bvm *vm);
 extern int l_save(bvm *vm);
 extern int t_random_byte(bvm *vm);
+extern int l_locale(bvm *vm);
 
 extern int l_read_sensors(bvm *vm);
 
@@ -55,27 +61,33 @@ extern int l_getswitch(bvm *vm);
 
 extern int l_i2cenabled(bvm *vm);
 extern int tasm_find_op(bvm *vm);
+extern int tasm_apply_str_op(bvm *vm);
+
+// tasmota.version() -> int
+extern int32_t be_Tasmota_version(void);
+BE_FUNC_CTYPE_DECLARE(be_Tasmota_version, "i", "-");
 
 #include "solidify/solidified_tasmota_class.h"
+#include "solidify/solidified_rule_matcher.h"
+#include "solidify/solidified_trigger_class.h"
 
 #include "be_fixed_be_class_tasmota.h"
 
-
 /* @const_object_info_begin
 class be_class_tasmota (scope: global, name: Tasmota) {
-    _fl, var
-    _rules, var
-    _timers, var
-    _crons, var
-    _ccmd, var
-    _drivers, var
-    wire1, var
-    wire2, var
-    cmd_res, var
-    global, var
-    settings, var
-    wd, var
-    _debug_present, var
+    _fl, var                            // list of active fast-loop object (faster than drivers)
+    _rules, var                         // list of active rules
+    _timers, var                        // list of active timers
+    _crons, var                         // list of active crons
+    _ccmd, var                          // list of active Tasmota commands implemented in Berry
+    _drivers, var                       // list of active drivers
+    wire1, var                          // Tasmota I2C Wire1
+    wire2, var                          // Tasmota I2C Wire2
+    cmd_res, var                        // store the command result, nil if disables, true if capture enabled, contains return value
+    global, var                         // mapping to TasmotaGlobal
+    settings, var                       // mapping to Tasmota Settings
+    wd, var                             // working dir
+    _debug_present, var                 // is `import debug` present?
 
     _global_def, comptr(&be_tasmota_global_struct)
     _settings_def, comptr(&be_tasmota_settings_struct)
@@ -94,17 +106,22 @@ class be_class_tasmota (scope: global, name: Tasmota) {
     millis, func(l_millis)
     time_reached, func(l_timereached)
     rtc, func(l_rtc)
+    rtc_utc, func(l_rtc_utc)
     time_dump, func(l_time_dump)
     strftime, func(l_strftime)
     strptime, func(l_strptime)
     memory, func(l_memory)
     wifi, func(l_wifi)
     eth, func(l_eth)
+    hostname, func(l_hostname)
     yield, func(l_yield)
     delay, func(l_delay)
-    scale_uint, func(l_scaleuint)
+    delay_microseconds, func(l_delay_microseconds)
+    scale_uint, static_func(l_scaleuint)
     log, func(l_logInfo)
+    loglevel, func(l_loglevel)
     save, func(l_save)
+    locale, func(l_locale)
 
     read_sensors, func(l_read_sensors)
 
@@ -125,13 +142,16 @@ class be_class_tasmota (scope: global, name: Tasmota) {
     get_switches, func(l_getswitch)
 
     i2c_enabled, func(l_i2cenabled)
+    version, ctype_func(be_Tasmota_version)
 
     fast_loop, closure(Tasmota_fast_loop_closure)
     add_fast_loop, closure(Tasmota_add_fast_loop_closure)
     remove_fast_loop, closure(Tasmota_remove_fast_loop_closure)
     cmd, closure(Tasmota_cmd_closure)
     _find_op, func(tasm_find_op)        // new C version for finding a rule operator
+    _apply_str_op, func(tasm_apply_str_op)
     find_key_i, closure(Tasmota_find_key_i_closure)
+    find_list_i, closure(Tasmota_find_list_i_closure)
     find_op, closure(Tasmota_find_op_closure)
     add_rule, closure(Tasmota_add_rule_closure)
     remove_rule, closure(Tasmota_remove_rule_closure)
@@ -167,5 +187,7 @@ class be_class_tasmota (scope: global, name: Tasmota) {
 
     get_light, closure(Tasmota_get_light_closure)
     set_light, closure(Tasmota_set_light_closure)
+
+    Rule_Matcher, class(be_class_Rule_Matcher)
 }
 @const_object_info_end */

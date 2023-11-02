@@ -21,10 +21,6 @@ extern "C" {
 extern struct rst_info resetInfo;
 }
 
-#ifdef USE_KNX
-bool knx_started = false;
-#endif  // USE_KNX
-
 /*********************************************************************************************\
  * Watchdog extension (https://github.com/esp8266/Arduino/issues/1532)
 \*********************************************************************************************/
@@ -104,6 +100,11 @@ uint32_t ResetReason(void) {
     REASON_EXT_SYS_RST      = 6   // "External System"         external system reset
   */
   return ESP_ResetInfoReason();
+}
+
+bool ResetReasonPowerOn(void) {
+  uint32_t reset_reason = ESP_ResetInfoReason();
+  return ((reset_reason == REASON_DEFAULT_RST) || (reset_reason == REASON_EXT_SYS_RST));
 }
 
 String GetResetReason(void) {
@@ -382,7 +383,7 @@ char* Unescape(char* buffer, uint32_t* size)
   int32_t end_size = *size;
   uint8_t che = 0;
 
-//  AddLogBuffer(LOG_LEVEL_DEBUG, (uint8_t*)buffer, *size);
+//  AddLog(LOG_LEVEL_DEBUG, PSTR("DBG: UnescapeIn %*_H"), *size, (uint8_t*)buffer);
 
   while (start_size > 0) {
     uint8_t ch = *read++;
@@ -426,7 +427,7 @@ char* Unescape(char* buffer, uint32_t* size)
   }
   *size = end_size;
   *write++ = 0;   // add the end string pointer reference
-//  AddLogBuffer(LOG_LEVEL_DEBUG, (uint8_t*)buffer, *size);
+//  AddLog(LOG_LEVEL_DEBUG, PSTR("DBG: UnescapeOut %*_H"), *size, (uint8_t*)buffer);
 
   return buffer;
 }
@@ -726,7 +727,7 @@ bool NewerVersion(char* version_str) {
   char version_dup[strlen(version_str) +1];
   strncpy(version_dup, version_str, sizeof(version_dup));  // Duplicate the version_str as strtok_r will modify it.
   // Loop through the version string, splitting on '.' seperators.
-  for (char *str = strtok_r(version_dup, ".", &str_ptr); str && i < sizeof(VERSION); str = strtok_r(nullptr, ".", &str_ptr), i++) {
+  for (char *str = strtok_r(version_dup, ".", &str_ptr); str && i < sizeof(TASMOTA_VERSION); str = strtok_r(nullptr, ".", &str_ptr), i++) {
     int field = atoi(str);
     // The fields in a version string can only range from 0-255.
     if ((field < 0) || (field > 255)) {
@@ -743,17 +744,33 @@ bool NewerVersion(char* version_str) {
   }
   // A version string should have 2-4 fields. e.g. 1.2, 1.2.3, or 1.2.3a (= 1.2.3.1).
   // If not, then don't consider it a valid version string.
-  if ((i < 2) || (i > sizeof(VERSION))) {
+  if ((i < 2) || (i > sizeof(TASMOTA_VERSION))) {
     return false;
   }
   // Keep shifting the parsed version until we hit the maximum number of tokens.
   // VERSION stores the major number of the version in the most significant byte of the uint32_t.
-  while (i < sizeof(VERSION)) {
+  while (i < sizeof(TASMOTA_VERSION)) {
     version <<= 8;
     i++;
   }
   // Now we should have a fully constructed version number in uint32_t form.
-  return (version > VERSION);
+  return (version > TASMOTA_VERSION);
+}
+
+int32_t UpdateDevicesPresent(int32_t change) {
+  int32_t difference = 0;
+  int32_t devices_present = TasmotaGlobal.devices_present;  // Between 0 and 32
+  devices_present += change;
+  if (devices_present < 0) {                          // Support down to 0
+    difference = devices_present;
+    devices_present = 0;
+  }
+  else if (devices_present >= POWER_SIZE) {           // Support up to uint32_t as bitmask
+    difference = devices_present - POWER_SIZE;
+    devices_present = POWER_SIZE;
+  }
+  TasmotaGlobal.devices_present = devices_present;
+  return difference;
 }
 
 char* GetPowerDevice(char* dest, uint32_t idx, size_t size, uint32_t option)
@@ -772,35 +789,38 @@ char* GetPowerDevice(char* dest, uint32_t idx, size_t size)
   return GetPowerDevice(dest, idx, size, 0);
 }
 
-float ConvertTempToFahrenheit(float c) {
-  float result = c;
+float ConvertTempToFahrenheit(float tc) {
+  if (isnan(tc)) { return NAN; }
 
-  if (!isnan(c) && Settings->flag.temperature_conversion) {    // SetOption8 - Switch between Celsius or Fahrenheit
-    result = c * 1.8f + 32;                                    // Fahrenheit
+  float result = tc;
+  if (Settings->flag.temperature_conversion) {                 // SetOption8 - Switch between Celsius or Fahrenheit
+    result = tc * 1.8f + 32;                                    // Fahrenheit
   }
   result = result + (0.1f * Settings->temp_comp);
   return result;
 }
 
-float ConvertTempToCelsius(float c) {
-  float result = c;
-  if (!isnan(c) && Settings->flag.temperature_conversion) {    // SetOption8 - Switch between Celsius or Fahrenheit
-    result = (c - 32) / 1.8f;                                  // Celsius
+float ConvertTempToCelsius(float tf) {
+  if (isnan(tf)) { return NAN; }
+
+  float result = tf;
+  if (Settings->flag.temperature_conversion) {                 // SetOption8 - Switch between Celsius or Fahrenheit
+    result = (tf - 32) / 1.8f;                                  // Celsius
   }
   return result;
 }
 
-void UpdateGlobalTemperature(float c) {
+void UpdateGlobalTemperature(float t) {
   if (!Settings->global_sensor_index[0] && !TasmotaGlobal.user_globals[0]) {
     TasmotaGlobal.global_update = TasmotaGlobal.uptime;
-    TasmotaGlobal.temperature_celsius = c;
+    TasmotaGlobal.temperature_celsius = t;
   }
 }
 
-float ConvertTemp(float c) {
-  UpdateGlobalTemperature(c);
+float ConvertTemp(float t) {
+  UpdateGlobalTemperature(t);
 
-  return ConvertTempToFahrenheit(c);
+  return ConvertTempToFahrenheit(t);
 }
 
 char TempUnit(void) {
@@ -825,16 +845,36 @@ float CalcTempHumToDew(float t, float h) {
   if (isnan(h) || isnan(t)) { return NAN; }
 
   if (Settings->flag.temperature_conversion) {                 // SetOption8 - Switch between Celsius or Fahrenheit
-    t = (t - 32) / 1.8f;                                        // Celsius
+    t = (t - 32) / 1.8f;                                       // Celsius
   }
 
   float gamma = TaylorLog(h / 100) + 17.62f * t / (243.5f + t);
   float result = (243.5f * gamma / (17.62f - gamma));
 
   if (Settings->flag.temperature_conversion) {                 // SetOption8 - Switch between Celsius or Fahrenheit
-    result = result * 1.8f + 32;                                // Fahrenheit
+    result = result * 1.8f + 32;                               // Fahrenheit
   }
   return result;
+}
+
+float CalcTempHumToAbsHum(float t, float h) {
+  if (isnan(t) || isnan(h)) { return NAN; }
+  // taken from https://carnotcycle.wordpress.com/2012/08/04/how-to-convert-relative-humidity-to-absolute-humidity/
+  // precision is about 0.1°C in range -30 to 35°C
+  // August-Roche-Magnus 	6.1094 exp(17.625 x T)/(T + 243.04)
+  // Buck (1981) 		6.1121 exp(17.502 x T)/(T + 240.97)
+  // reference https://www.eas.ualberta.ca/jdwilson/EAS372_13/Vomel_CIRES_satvpformulae.html
+
+  if (Settings->flag.temperature_conversion) {                 // SetOption8 - Switch between Celsius or Fahrenheit
+    t = (t - 32) / 1.8f;                                       // Celsius
+  }
+
+  float temp = FastPrecisePow(2.718281828f, (17.67f * t) / (t + 243.5f));
+
+  const float mw = 18.01534f;                                  // Molar mass of water g/mol
+  const float r = 8.31447215f;                                 // Universal gas constant J/mol/K
+//  return (6.112 * temp * h * 2.1674) / (273.15 + t);           // Simplified version
+  return (6.112f * temp * h * mw) / ((273.15f + t) * r);       // Long version
 }
 
 float ConvertHgToHpa(float p) {
@@ -1023,18 +1063,20 @@ bool DecodeCommand(const char* haystack, void (* const MyCommand[])(void), const
   return false;
 }
 
-const char kOptions[] PROGMEM = "OFF|" D_OFF "|FALSE|" D_FALSE "|STOP|" D_STOP "|" D_CELSIUS "|"              // 0
+const char kOptions[] PROGMEM = "OFF|" D_OFF "|FALSE|" D_FALSE "|STOP|" D_STOP "|" D_CELSIUS "|DOWN|" D_CLOSE "|"   // 0
                                 "ON|" D_ON "|TRUE|" D_TRUE "|START|" D_START "|" D_FAHRENHEIT "|" D_USER "|"  // 1
                                 "TOGGLE|" D_TOGGLE "|" D_ADMIN "|"                                            // 2
                                 "BLINK|" D_BLINK "|"                                                          // 3
                                 "BLINKOFF|" D_BLINKOFF "|"                                                    // 4
+                                "UP|" D_OPEN  "|"                                                             // 100
                                 "ALL" ;                                                                       // 255
 
-const uint8_t sNumbers[] PROGMEM = { 0,0,0,0,0,0,0,
+const uint8_t sNumbers[] PROGMEM = { 0,0,0,0,0,0,0,0,0,
                                      1,1,1,1,1,1,1,1,
                                      2,2,2,
                                      3,3,
                                      4,4,
+                                     100,100,
                                      255 };
 
 int GetStateNumber(const char *state_text)
@@ -1123,6 +1165,22 @@ uint32_t WebColor(uint32_t i)
   uint32_t tcolor = (Settings->web_color[i][0] << 16) | (Settings->web_color[i][1] << 8) | Settings->web_color[i][2];
 
   return tcolor;
+}
+
+void AllowInterrupts(bool state) {
+  if (!state) {  // Stop interrupts
+    XdrvXsnsCall(FUNC_INTERRUPT_STOP);
+
+#ifdef USE_EMULATION
+    UdpDisconnect();
+#endif  // USE_EMULATION
+  } else {       // Start interrupts
+#ifdef USE_EMULATION
+    UdpConnect();
+#endif  // USE_EMULATION
+
+    XdrvXsnsCall(FUNC_INTERRUPT_START);
+  }
 }
 
 /*********************************************************************************************\
@@ -1352,8 +1410,7 @@ void ConvertGpios(void) {
 }
 #endif  // ESP8266
 
-int IRAM_ATTR Pin(uint32_t gpio, uint32_t index = 0);
-int IRAM_ATTR Pin(uint32_t gpio, uint32_t index) {
+int IRAM_ATTR Pin(uint32_t gpio, uint32_t index = 0) {
   uint16_t real_gpio = gpio << 5;
   uint16_t mask = 0xFFE0;
   if (index < GPIO_ANY) {
@@ -1385,16 +1442,26 @@ void SetPin(uint32_t lpin, uint32_t gpio) {
   TasmotaGlobal.gpio_pin[lpin] = gpio;
 }
 
+#ifdef CONFIG_IDF_TARGET_ESP32C3
+#include "driver/gpio.h"                         // Include needed for Arduino 3
+#endif
+
 void DigitalWrite(uint32_t gpio_pin, uint32_t index, uint32_t state) {
   static uint32_t pinmode_init[2] = { 0 };       // Pins 0 to 63 !!!
 
   if (PinUsed(gpio_pin, index)) {
     uint32_t pin = Pin(gpio_pin, index) & 0x3F;  // Fix possible overflow over 63 gpios
+#ifdef CONFIG_IDF_TARGET_ESP32C3
+    gpio_hold_dis((gpio_num_t)pin);              // Allow state change
+#endif
     if (!bitRead(pinmode_init[pin / 32], pin % 32)) {
       bitSet(pinmode_init[pin / 32], pin % 32);
       pinMode(pin, OUTPUT);
     }
     digitalWrite(pin, state &1);
+#ifdef CONFIG_IDF_TARGET_ESP32C3
+    gpio_hold_en((gpio_num_t)pin);               // Retain the state when the chip or system is reset, for example, when watchdog time-out or Deep-sleep
+#endif
   }
 }
 
@@ -1478,7 +1545,7 @@ void GetInternalTemplate(void* ptr, uint32_t module, uint32_t option) {
     memcpy_P(&template8, &kModules8285[module_template - TMP_WEMOS], sizeof(template8));
   }
 
-//  AddLogBuffer(LOG_LEVEL_DEBUG, (uint8_t *)&template8, sizeof(mytmplt8285));
+//  AddLog(LOG_LEVEL_DEBUG, PSTR("DBG: GetInternalTemplate %*_H"), sizeof(mytmplt8285), (uint8_t *)&template8);
 
   // template16  = GPIO 0,1,2,3,4,5,9,10,12,13,14,15,16,Adc,Flg
   uint16_t template16[(sizeof(mytmplt) / 2)] = { GPIO_NONE };
@@ -1499,8 +1566,7 @@ void GetInternalTemplate(void* ptr, uint32_t module, uint32_t option) {
   }
   memcpy(ptr, &template16[index], size);
 
-//  AddLog(LOG_LEVEL_DEBUG, PSTR("FNC: GetInternalTemplate option %d"), option);
-//  AddLogBufferSize(LOG_LEVEL_DEBUG, (uint8_t *)ptr, size / 2, 2);
+//  AddLog(LOG_LEVEL_DEBUG, PSTR("FNC: GetInternalTemplate option %d, %*_V"), option, size / 2, (uint8_t *)ptr);
 }
 #endif  // ESP8266
 
@@ -1527,11 +1593,12 @@ void TemplateGpios(myio *gp)
   }
   // 11 85 00 85 85 00 00 00 15 38 85 00 00 81
 
-//  AddLogBuffer(LOG_LEVEL_DEBUG, (uint8_t *)&src, sizeof(mycfgio));
+//  AddLog(LOG_LEVEL_DEBUG, PSTR("DBG: TemplateGpiosIn %*_H"), sizeof(mycfgio), (uint8_t *)&src);
 
   // Expand template to physical GPIO array, j=phy_GPIO, i=template_GPIO
   uint32_t j = 0;
   for (uint32_t i = 0; i < nitems(Settings->user_template.gp.io); i++) {
+/*
 #if defined(ESP32) && CONFIG_IDF_TARGET_ESP32C3
     dest[i] = src[i];
 #elif defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
@@ -1546,10 +1613,28 @@ void TemplateGpios(myio *gp)
     dest[j] = src[i];
     j++;
 #endif
+*/
+#ifdef ESP8266
+    if (6 == i) { j = 9; }
+    if (8 == i) { j = 12; }
+    dest[j] = src[i];
+    j++;
+#endif  // ESP8266
+#ifdef ESP32
+#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C6
+    dest[i] = src[i];
+#elif CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
+    if (22 == i) { j = 33; }    // skip 22-32
+    dest[j] = src[i];
+    j++;
+#else  // ESP32
+    dest[Esp32TemplateToPhy[i]] = src[i];
+#endif  // ESP32C2/C3/C6 and S2/S3
+#endif  // ESP32
   }
   // 11 85 00 85 85 00 00 00 00 00 00 00 15 38 85 00 00 81
 
-//  AddLogBuffer(LOG_LEVEL_DEBUG, (uint8_t *)gp, sizeof(myio));
+//  AddLog(LOG_LEVEL_DEBUG, PSTR("DBG: TemplateGpiosOut %*_H"), sizeof(myio), (uint8_t *)gp);
 }
 
 gpio_flag ModuleFlag(void)
@@ -1599,48 +1684,60 @@ void SetModuleType(void)
 #endif
 }
 
-bool FlashPin(uint32_t pin)
-{
-#if defined(ESP32) && CONFIG_IDF_TARGET_ESP32C3
-  return (((pin > 10) && (pin < 12)) || ((pin > 13) && (pin < 18)));  // ESP32C3 has GPIOs 11-17 reserved for Flash, with some boards GPIOs 12 13 are useable
-#elif defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3)
-  return (pin > 21) && (pin < 33);        // ESP32S2 skip 22-32
-#elif defined(CONFIG_IDF_TARGET_ESP32)
-  return (pin >= 28) && (pin <= 31);      // ESP21 skip 28-31
-#else // ESP8266
+bool FlashPin(uint32_t pin) {
+#ifdef ESP8266
   return (((pin > 5) && (pin < 9)) || (11 == pin));
-#endif
+#endif  // ESP8266
+#ifdef ESP32
+#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3
+  return (((pin > 10) && (pin < 12)) || ((pin > 13) && (pin < 18)));  // ESP32C3 has GPIOs 11-17 reserved for Flash, with some boards GPIOs 12 13 are useable
+#elif CONFIG_IDF_TARGET_ESP32C6
+  return ((pin == 24) || (pin == 25) || (pin == 27) || (pin == 29) || (pin == 30));  // ESP32C6 has GPIOs 24-30 reserved for Flash, with some boards GPIOs 26 28 are useable
+#elif CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
+  return (pin > 21) && (pin < 33);     // ESP32S2 skip 22-32
+#else
+  return (pin >= 28) && (pin <= 31);   // ESP32 skip 28-31
+#endif  // ESP32C2/C3/C6 and S2/S3
+#endif  // ESP32
 }
 
-bool RedPin(uint32_t pin) // pin may be dangerous to change, display in RED in template console
-{
-#if defined(ESP32) && CONFIG_IDF_TARGET_ESP32C3
-  return (12==pin)||(13==pin);  // ESP32C3: GPIOs 12 13 are usually used for Flash (mode QIO/QOUT)
-#elif defined(CONFIG_IDF_TARGET_ESP32S2)
-  return false;     // no red pin on ESP32S3
-#elif defined(CONFIG_IDF_TARGET_ESP32S3)
-  return (33<=pin) && (37>=pin);  // ESP32S3: GPIOs 33..37 are usually used for PSRAM
-#elif defined(CONFIG_IDF_TARGET_ESP32)  // red pins are 6-11 for original ESP32, other models like PICO are not impacted if flash pins are condfigured
+bool RedPin(uint32_t pin) {            // Pin may be dangerous to change, display in RED in template console
+#ifdef ESP8266
+  return (9 == pin) || (10 == pin);
+#endif  // ESP8266
+#ifdef ESP32
+#if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3
+  return (12 == pin) || (13 == pin);   // ESP32C3: GPIOs 12 13 are usually used for Flash (mode QIO/QOUT)
+#elif CONFIG_IDF_TARGET_ESP32C6
+  return (26 == pin) || (28 == pin);   // ESP32C6: GPIOs 26 28 are usually used for Flash (mode QIO/QOUT)
+#elif CONFIG_IDF_TARGET_ESP32S2
+  return false;                        // No red pin on ESP32S3
+#elif CONFIG_IDF_TARGET_ESP32S3
+  return (33 <= pin) && (37 >= pin);   // ESP32S3: GPIOs 33..37 are usually used for PSRAM
+#else   // ESP32 red pins are 6-11 for original ESP32, other models like PICO are not impacted if flash pins are condfigured
   // PICO can also have 16/17/18/23 not available
-  return ((6<=pin) && (11>=pin)) || (16==pin) || (17==pin);  // TODO adapt depending on the exact type of ESP32
-#else // ESP8266
-  return (9==pin)||(10==pin);
-#endif
+  return ((6 <= pin) && (11 >= pin)) || (16 == pin) || (17 == pin);  // TODO adapt depending on the exact type of ESP32
+#endif  // ESP32C2/C3/C6 and S2/S3
+#endif  // ESP32
 }
 
-uint32_t ValidPin(uint32_t pin, uint32_t gpio) {
+uint32_t ValidPin(uint32_t pin, uint32_t gpio, uint8_t isTuya = false) {
   if (FlashPin(pin)) {
     return GPIO_NONE;    // Disable flash pins GPIO6, GPIO7, GPIO8 and GPIO11
   }
 
-#if defined(CONFIG_IDF_TARGET_ESP32C3)
+#if CONFIG_IDF_TARGET_ESP32C2
 // ignore
-#elif defined(CONFIG_IDF_TARGET_ESP32S2)
+#elif CONFIG_IDF_TARGET_ESP32C3
 // ignore
-#elif defined(CONFIG_IDF_TARGET_ESP32)
+#elif CONFIG_IDF_TARGET_ESP32C6
+// ignore
+#elif CONFIG_IDF_TARGET_ESP32S2
+// ignore
+#elif CONFIG_IDF_TARGET_ESP32
 // ignore
 #else // not ESP32C3 and not ESP32S2
-  if ((WEMOS == Settings->module) && !Settings->flag3.user_esp8285_enable) {  // SetOption51 - Enable ESP8285 user GPIO's
+  if (((WEMOS == Settings->module) || isTuya) && !Settings->flag3.user_esp8285_enable) {  // SetOption51 - Enable ESP8285 user GPIO's
     if ((9 == pin) || (10 == pin)) {
       return GPIO_NONE;  // Disable possible flash GPIO9 and GPIO10
     }
@@ -1756,16 +1853,14 @@ bool JsonTemplate(char* dataBuf)
     }
   }
 
-//  AddLog(LOG_LEVEL_DEBUG, PSTR("TPL: Converted"));
-//  AddLogBufferSize(LOG_LEVEL_DEBUG, (uint8_t*)&Settings->user_template, sizeof(Settings->user_template) / 2, 2);
+//  AddLog(LOG_LEVEL_DEBUG, PSTR("TPL: Converted %*_V"), sizeof(Settings->user_template) / 2, (uint8_t*)&Settings->user_template);
 
   return true;
 }
 
 void TemplateJson(void)
 {
-//  AddLog(LOG_LEVEL_DEBUG, PSTR("TPL: Show"));
-//  AddLogBufferSize(LOG_LEVEL_DEBUG, (uint8_t*)&Settings->user_template, sizeof(Settings->user_template) / 2, 2);
+//  AddLog(LOG_LEVEL_DEBUG, PSTR("TPL: Show %*_V"), sizeof(Settings->user_template) / 2, (uint8_t*)&Settings->user_template);
 
   Response_P(PSTR("{\"" D_JSON_NAME "\":\"%s\",\"" D_JSON_GPIO "\":["), SettingsText(SET_TEMPLATE_NAME));
   for (uint32_t i = 0; i < nitems(Settings->user_template.gp.io); i++) {
@@ -1963,7 +2058,7 @@ void SetSerialBegin(void) {
   SetSerialSwap();
 #endif  // ESP8266
 #ifdef ESP32
-#ifdef ARDUINO_USB_CDC_ON_BOOT
+#if ARDUINO_USB_MODE
 //  Serial.end();
 //  Serial.begin();
   // Above sequence ends in "Exception":5,"Reason":"Load access fault"
@@ -1973,8 +2068,15 @@ void SetSerialBegin(void) {
   Serial.end();
   delay(10);  // Allow time to cleanup queues - if not used hangs ESP32
   Serial.begin(TasmotaGlobal.baudrate, ConvertSerialConfig(Settings->serial_config));
-#endif  // Not ARDUINO_USB_CDC_ON_BOOT
+#endif  // Not ARDUINO_USB_MODE
 #endif  // ESP32
+}
+
+void SetSerialInitBegin(void) {
+  TasmotaGlobal.baudrate = Settings->baudrate * 300;
+  if ((GetSerialBaudrate() != TasmotaGlobal.baudrate) || (TS_SERIAL_8N1 != Settings->serial_config)) {
+    SetSerialBegin();
+  }
 }
 
 void SetSerialConfig(uint32_t serial_config) {
@@ -2006,18 +2108,17 @@ void SetSerial(uint32_t baudrate, uint32_t serial_config) {
 
 void ClaimSerial(void) {
 #ifdef ESP32
-#if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
+#if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C6 || CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
 #ifdef USE_USB_CDC_CONSOLE
   return;              // USB console does not use serial
 #endif  // USE_USB_CDC_CONSOLE
-#endif  // ESP32C3, S2 or S3
+#endif  // ESP32C3/C6, S2 or S3
 #endif  // ESP32
   TasmotaGlobal.serial_local = true;
   AddLog(LOG_LEVEL_INFO, PSTR("SNS: Hardware Serial"));
   SetSeriallog(LOG_LEVEL_NONE);
   TasmotaGlobal.baudrate = GetSerialBaudrate();
   Settings->baudrate = TasmotaGlobal.baudrate / 300;
-
 }
 
 void SerialSendRaw(char *codes)
@@ -2148,338 +2249,29 @@ bool TimeReachedUsec(uint32_t timer)
   return (passed >= 0);
 }
 
-/*********************************************************************************************\
- * Basic I2C routines
-\*********************************************************************************************/
-
-#ifdef USE_I2C
-const uint8_t I2C_RETRY_COUNTER = 3;
-
-uint32_t i2c_active[4] = { 0 };
-uint32_t i2c_buffer = 0;
-
-bool I2cBegin(int sda, int scl, uint32_t frequency = 100000);
-bool I2cBegin(int sda, int scl, uint32_t frequency) {
-  bool result = true;
-#ifdef ESP8266
-  Wire.begin(sda, scl);
-#endif
-#ifdef ESP32
-#if ESP_IDF_VERSION_MAJOR > 3  // Core 2.x uses a different I2C library
-  static bool reinit = false;
-  if (reinit) { Wire.end(); }
-#endif  // ESP_IDF_VERSION_MAJOR > 3
-  result = Wire.begin(sda, scl, frequency);
-#if ESP_IDF_VERSION_MAJOR > 3  // Core 2.x uses a different I2C library
-  reinit = result;
-#endif  // ESP_IDF_VERSION_MAJOR > 3
-#endif
-//  AddLog(LOG_LEVEL_DEBUG, PSTR("I2C: Bus1 %d"), result);
-  return result;
+void SystemBusyDelay(uint32_t busy) {
+/*
+  TasmotaGlobal.busy_time = millis();
+  SetNextTimeInterval(TasmotaGlobal.busy_time, busy +1);
+  if (!TasmotaGlobal.busy_time) {
+    TasmotaGlobal.busy_time++;
+  }
+*/
+  TasmotaGlobal.busy_time = busy;
 }
 
-#ifdef ESP32
-bool I2c2Begin(int sda, int scl, uint32_t frequency = 100000);
-bool I2c2Begin(int sda, int scl, uint32_t frequency) {
-  bool result = Wire1.begin(sda, scl, frequency);
-//  AddLog(LOG_LEVEL_DEBUG, PSTR("I2C: Bus2 %d"), result);
-  return result;
-}
-
-bool I2cValidRead(uint8_t addr, uint8_t reg, uint8_t size, uint32_t bus = 0);
-bool I2cValidRead(uint8_t addr, uint8_t reg, uint8_t size, uint32_t bus)
-#else
-bool I2cValidRead(uint8_t addr, uint8_t reg, uint8_t size)
-#endif
-{
-  uint8_t retry = I2C_RETRY_COUNTER;
-  bool status = false;
-#ifdef ESP32
-  if (!TasmotaGlobal.i2c_enabled_2) { bus = 0; }
-  TwoWire & myWire = (bus == 0) ? Wire : Wire1;
-#else
-  TwoWire & myWire = Wire;
-#endif
-
-  i2c_buffer = 0;
-  while (!status && retry) {
-    myWire.beginTransmission(addr);                       // start transmission to device
-    myWire.write(reg);                                    // sends register address to read from
-    if (0 == myWire.endTransmission(false)) {             // Try to become I2C Master, send data and collect bytes, keep master status for next request...
-      myWire.requestFrom((int)addr, (int)size);           // send data n-bytes read
-      if (myWire.available() == size) {
-        for (uint32_t i = 0; i < size; i++) {
-          i2c_buffer = i2c_buffer << 8 | myWire.read();   // receive DATA
-        }
-        status = true;
-      }
+void SystemBusyDelayExecute(void) {
+  if (TasmotaGlobal.busy_time) {
+/*
+    // Calls to millis() interrupt RMT and defeats our goal
+    if (!TimeReached(TasmotaGlobal.busy_time)) {
+      delay(1);
     }
-    retry--;
-  }
-  if (!retry) myWire.endTransmission();
-  return status;
-}
-
-bool I2cValidRead8(uint8_t *data, uint8_t addr, uint8_t reg)
-{
-  bool status = I2cValidRead(addr, reg, 1);
-  *data = (uint8_t)i2c_buffer;
-  return status;
-}
-
-bool I2cValidRead16(uint16_t *data, uint8_t addr, uint8_t reg)
-{
-  bool status = I2cValidRead(addr, reg, 2);
-  *data = (uint16_t)i2c_buffer;
-  return status;
-}
-
-bool I2cValidReadS16(int16_t *data, uint8_t addr, uint8_t reg)
-{
-  bool status = I2cValidRead(addr, reg, 2);
-  *data = (int16_t)i2c_buffer;
-  return status;
-}
-
-bool I2cValidRead16LE(uint16_t *data, uint8_t addr, uint8_t reg)
-{
-  uint16_t ldata;
-  bool status = I2cValidRead16(&ldata, addr, reg);
-  *data = (ldata >> 8) | (ldata << 8);
-  return status;
-}
-
-bool I2cValidReadS16_LE(int16_t *data, uint8_t addr, uint8_t reg)
-{
-  uint16_t ldata;
-  bool status = I2cValidRead16LE(&ldata, addr, reg);
-  *data = (int16_t)ldata;
-  return status;
-}
-
-bool I2cValidRead24(int32_t *data, uint8_t addr, uint8_t reg)
-{
-  bool status = I2cValidRead(addr, reg, 3);
-  *data = i2c_buffer;
-  return status;
-}
-
-uint8_t I2cRead8(uint8_t addr, uint8_t reg)
-{
-  I2cValidRead(addr, reg, 1);
-  return (uint8_t)i2c_buffer;
-}
-
-uint16_t I2cRead16(uint8_t addr, uint8_t reg)
-{
-  I2cValidRead(addr, reg, 2);
-  return (uint16_t)i2c_buffer;
-}
-
-int16_t I2cReadS16(uint8_t addr, uint8_t reg)
-{
-  I2cValidRead(addr, reg, 2);
-  return (int16_t)i2c_buffer;
-}
-
-uint16_t I2cRead16LE(uint8_t addr, uint8_t reg)
-{
-  I2cValidRead(addr, reg, 2);
-  uint16_t temp = (uint16_t)i2c_buffer;
-  return (temp >> 8) | (temp << 8);
-}
-
-int16_t I2cReadS16_LE(uint8_t addr, uint8_t reg)
-{
-  return (int16_t)I2cRead16LE(addr, reg);
-}
-
-int32_t I2cRead24(uint8_t addr, uint8_t reg)
-{
-  I2cValidRead(addr, reg, 3);
-  return i2c_buffer;
-}
-
-#ifdef ESP32
-bool I2cWrite(uint8_t addr, uint8_t reg, uint32_t val, uint8_t size, uint32_t bus = 0);
-bool I2cWrite(uint8_t addr, uint8_t reg, uint32_t val, uint8_t size, uint32_t bus)
-#else
-bool I2cWrite(uint8_t addr, uint8_t reg, uint32_t val, uint8_t size)
-#endif
-{
-  uint8_t x = I2C_RETRY_COUNTER;
-
-#ifdef ESP32
-  if (!TasmotaGlobal.i2c_enabled_2) { bus = 0; }
-  TwoWire & myWire = (bus == 0) ? Wire : Wire1;
-#else
-  TwoWire & myWire = Wire;
-#endif
-
-  do {
-    myWire.beginTransmission((uint8_t)addr);              // start transmission to device
-    myWire.write(reg);                                    // sends register address to write to
-    uint8_t bytes = size;
-    while (bytes--) {
-      myWire.write((val >> (8 * bytes)) & 0xFF);          // write data
-    }
-    x--;
-  } while (myWire.endTransmission(true) != 0 && x != 0);  // end transmission
-  return (x);
-}
-
-bool I2cWrite8(uint8_t addr, uint8_t reg, uint16_t val)
-{
-   return I2cWrite(addr, reg, val, 1);
-}
-
-bool I2cWrite16(uint8_t addr, uint8_t reg, uint16_t val)
-{
-   return I2cWrite(addr, reg, val, 2);
-}
-
-int8_t I2cReadBuffer(uint8_t addr, uint8_t reg, uint8_t *reg_data, uint16_t len)
-{
-  Wire.beginTransmission((uint8_t)addr);
-  Wire.write((uint8_t)reg);
-  Wire.endTransmission();
-  if (len != Wire.requestFrom((uint8_t)addr, (uint8_t)len)) {
-    return 1;
-  }
-  while (len--) {
-    *reg_data = (uint8_t)Wire.read();
-    reg_data++;
-  }
-  return 0;
-}
-
-int8_t I2cWriteBuffer(uint8_t addr, uint8_t reg, uint8_t *reg_data, uint16_t len)
-{
-  Wire.beginTransmission((uint8_t)addr);
-  Wire.write((uint8_t)reg);
-  while (len--) {
-    Wire.write(*reg_data);
-    reg_data++;
-  }
-  Wire.endTransmission();
-  return 0;
-}
-
-void I2cScan(uint32_t bus = 0);
-void I2cScan(uint32_t bus) {
-  // Return error codes defined in twi.h and core_esp8266_si2c.c
-  // I2C_OK                      0
-  // I2C_SCL_HELD_LOW            1 = SCL held low by another device, no procedure available to recover
-  // I2C_SCL_HELD_LOW_AFTER_READ 2 = I2C bus error. SCL held low beyond client clock stretch time
-  // I2C_SDA_HELD_LOW            3 = I2C bus error. SDA line held low by client/another_master after n bits
-  // I2C_SDA_HELD_LOW_AFTER_INIT 4 = line busy. SDA again held low by another device. 2nd master?
-  //                             5 = bus busy. Timeout
-  // https://www.arduino.cc/reference/en/language/functions/communication/wire/endtransmission/
-  // 0: success
-  // 1: data too long to fit in transmit buffer
-  // 2: received NACK on transmit of address
-  // 3: received NACK on transmit of data
-  // 4: other error
-  // 5: timeout
-
-  uint8_t error = 0;
-  uint8_t address = 0;
-  uint8_t any = 0;
-
-  Response_P(PSTR("{\"" D_CMND_I2CSCAN "\":\"" D_JSON_I2CSCAN_DEVICES_FOUND_AT));
-  for (address = 1; address <= 127; address++) {
-#ifdef ESP32
-    if (!TasmotaGlobal.i2c_enabled_2) { bus = 0; }
-    TwoWire & myWire = (bus == 0) ? Wire : Wire1;
-#else
-    TwoWire & myWire = Wire;
-#endif
-    myWire.beginTransmission(address);
-    error = myWire.endTransmission();
-    if (0 == error) {
-      any = 1;
-      ResponseAppend_P(PSTR(" 0x%02x"), address);
-    }
-    else if (error != 2) {  // Seems to happen anyway using this scan
-      any = 2;
-      Response_P(PSTR("{\"" D_CMND_I2CSCAN "\":\"Error %d at 0x%02x"), error, address);
-      break;
-    }
-  }
-  if (any) {
-    ResponseAppend_P(PSTR("\"}"));
-  }
-  else {
-    Response_P(PSTR("{\"" D_CMND_I2CSCAN "\":\"" D_JSON_I2CSCAN_NO_DEVICES_FOUND "\"}"));
+*/
+    delay(TasmotaGlobal.busy_time);
+    TasmotaGlobal.busy_time = 0;
   }
 }
-
-void I2cResetActive(uint32_t addr, uint32_t count = 1)
-{
-  addr &= 0x7F;         // Max I2C address is 127
-  count &= 0x7F;        // Max 4 x 32 bits available
-  while (count-- && (addr < 128)) {
-    i2c_active[addr / 32] &= ~(1 << (addr % 32));
-    addr++;
-  }
-//  AddLog(LOG_LEVEL_DEBUG, PSTR("I2C: Active %08X,%08X,%08X,%08X"), i2c_active[0], i2c_active[1], i2c_active[2], i2c_active[3]);
-}
-
-void I2cSetActive(uint32_t addr, uint32_t count = 1)
-{
-  addr &= 0x7F;         // Max I2C address is 127
-  count &= 0x7F;        // Max 4 x 32 bits available
-  while (count-- && (addr < 128)) {
-    i2c_active[addr / 32] |= (1 << (addr % 32));
-    addr++;
-  }
-//  AddLog(LOG_LEVEL_DEBUG, PSTR("I2C: Active %08X,%08X,%08X,%08X"), i2c_active[0], i2c_active[1], i2c_active[2], i2c_active[3]);
-}
-
-void I2cSetActiveFound(uint32_t addr, const char *types, uint32_t bus = 0);
-void I2cSetActiveFound(uint32_t addr, const char *types, uint32_t bus) {
-  I2cSetActive(addr);
-#ifdef ESP32
-  if (0 == bus) {
-    AddLog(LOG_LEVEL_INFO, S_LOG_I2C_FOUND_AT, types, addr);
-  } else {
-    AddLog(LOG_LEVEL_INFO, S_LOG_I2C_FOUND_AT_PORT, types, addr, bus);
-  }
-#else
-  AddLog(LOG_LEVEL_INFO, S_LOG_I2C_FOUND_AT, types, addr);
-#endif // ESP32
-}
-
-bool I2cActive(uint32_t addr)
-{
-  addr &= 0x7F;         // Max I2C address is 127
-  if (i2c_active[addr / 32] & (1 << (addr % 32))) {
-    return true;
-  }
-  return false;
-}
-
-bool I2cSetDevice(uint32_t addr, uint32_t bus = 0);
-bool I2cSetDevice(uint32_t addr, uint32_t bus) {
-#ifdef ESP32
-  if (!TasmotaGlobal.i2c_enabled_2) { bus = 0; }
-  TwoWire & myWire = (bus == 0) ? Wire : Wire1;
-#else
-  TwoWire & myWire = Wire;
-#endif
-  addr &= 0x7F;         // Max I2C address is 127
-  if (I2cActive(addr)) {
-    return false;       // If already active report as not present;
-  }
-  myWire.beginTransmission((uint8_t)addr);
-//  return (0 == myWire.endTransmission());
-  uint32_t err = myWire.endTransmission();
-  if (err && (err != 2)) {
-    AddLog(LOG_LEVEL_DEBUG, PSTR("I2C: Error %d at 0x%02x"), err, addr);
-  }
-  return (0 == err);
-}
-#endif  // USE_I2C
 
 /*********************************************************************************************\
  * Syslog
@@ -2642,7 +2434,8 @@ bool GetLog(uint32_t req_loglevel, uint32_t* index_p, char** entry_pp, size_t* l
 }
 
 void AddLogData(uint32_t loglevel, const char* log_data, const char* log_data_payload = nullptr, const char* log_data_retained = nullptr) {
-  if (!TasmotaGlobal.enable_logging) { return; }
+  // Ignore any logging when maxlog_level = 0 OR logging for levels equal or lower than maxlog_level
+  if (!TasmotaGlobal.maxlog_level || (loglevel > TasmotaGlobal.maxlog_level)) { return; }
   // Store log_data in buffer
   // To lower heap usage log_data_payload may contain the payload data from MqttPublishPayload()
   //  and log_data_retained may contain optional retained message from MqttPublishPayload()
@@ -2724,13 +2517,18 @@ void AddLogData(uint32_t loglevel, const char* log_data, const char* log_data_pa
   }
 }
 
-void AddLog(uint32_t loglevel, PGM_P formatP, ...) {
+uint32_t HighestLogLevel() {
   uint32_t highest_loglevel = TasmotaGlobal.seriallog_level;
   if (Settings->weblog_level > highest_loglevel) { highest_loglevel = Settings->weblog_level; }
   if (Settings->mqttlog_level > highest_loglevel) { highest_loglevel = Settings->mqttlog_level; }
   if (TasmotaGlobal.syslog_level > highest_loglevel) { highest_loglevel = TasmotaGlobal.syslog_level; }
   if (TasmotaGlobal.templog_level > highest_loglevel) { highest_loglevel = TasmotaGlobal.templog_level; }
   if (TasmotaGlobal.uptime < 3) { highest_loglevel = LOG_LEVEL_DEBUG_MORE; }  // Log all before setup correct log level
+  return highest_loglevel;
+}
+
+void AddLog(uint32_t loglevel, PGM_P formatP, ...) {
+  uint32_t highest_loglevel = HighestLogLevel();
 
   // If no logging is requested then do not access heap to fight fragmentation
   if ((loglevel <= highest_loglevel) && (TasmotaGlobal.masterlog_level <= highest_loglevel)) {
@@ -2745,35 +2543,18 @@ void AddLog(uint32_t loglevel, PGM_P formatP, ...) {
   }
 }
 
-void AddLogBuffer(uint32_t loglevel, uint8_t *buffer, uint32_t count)
-{
+void AddLogBuffer(uint32_t loglevel, uint8_t *buffer, uint32_t count) {
   char hex_char[(count * 3) + 2];
   AddLog(loglevel, PSTR("DMP: %s"), ToHex_P(buffer, count, hex_char, sizeof(hex_char), ' '));
 }
 
-void AddLogSerial(uint32_t loglevel)
-{
-  AddLogBuffer(loglevel, (uint8_t*)TasmotaGlobal.serial_in_buffer, TasmotaGlobal.serial_in_byte_counter);
+void AddLogSerial() {
+  AddLogBuffer(LOG_LEVEL_DEBUG, (uint8_t*)TasmotaGlobal.serial_in_buffer, TasmotaGlobal.serial_in_byte_counter);
 }
 
 void AddLogMissed(const char *sensor, uint32_t misses)
 {
   AddLog(LOG_LEVEL_DEBUG, PSTR("SNS: %s missed %d"), sensor, SENSOR_MAX_MISS - misses);
-}
-
-void AddLogBufferSize(uint32_t loglevel, uint8_t *buffer, uint32_t count, uint32_t size) {
-  char log_data[4 + (count * size * 3)];
-
-  snprintf_P(log_data, sizeof(log_data), PSTR("DMP:"));
-  for (uint32_t i = 0; i < count; i++) {
-    if (1 == size) {  // uint8_t
-      snprintf_P(log_data, sizeof(log_data), PSTR("%s %02X"), log_data, *(buffer));
-    } else {          // uint16_t
-      snprintf_P(log_data, sizeof(log_data), PSTR("%s %02X%02X"), log_data, *(buffer +1), *(buffer));
-    }
-    buffer += size;
-  }
-  AddLogData(loglevel, log_data);
 }
 
 void AddLogSpi(bool hardware, uint32_t clk, uint32_t mosi, uint32_t miso) {

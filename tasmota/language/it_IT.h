@@ -28,7 +28,7 @@
  * Use online command StateText to translate ON, OFF, HOLD and TOGGLE.
  * Use online command Prefix to translate cmnd, stat and tele.
  *
- * Updated until v9.4.0.1 - Last update 05.10.2022
+ * Updated until v9.4.0.1 - Last update 15.10.2023
 \*********************************************************************/
 
 #define LANGUAGE_MODULE_NAME         // Enable to display "Module Generic" (ie Spanish), Disable to display "Generic Module" (ie English)
@@ -51,12 +51,14 @@
 #define D_DECIMAL_SEPARATOR "."
 
 // Common
+#define D_ABSOLUTE_HUMIDITY    "Umidità ass"
 #define D_ADMIN                "Admin"
 #define D_AIR_QUALITY          "Qualità dell'aria"
 #define D_AP                   "AP"                   // Access Point
 #define D_AS                   "come"
 #define D_AUTO                 "AUTO"
 #define D_BATT                 "Batt"                 // Short for Battery
+#define D_BATTERY_CHARGE       "Carica"               // Battery charge in %
 #define D_BLINK                "Lampeggia"
 #define D_BLINKOFF             "Lampeggia OFF"
 #define D_BOOT_COUNT           "Numero boot"
@@ -83,6 +85,9 @@
 #define D_DEBUG                "Debug"
 #define D_DEWPOINT             "Punto rugiada" //
 #define D_DISABLED             "Disabilitato/a"
+#define D_MOVING_DISTANCE      "Distanza in movimento"
+#define D_STATIC_DISTANCE      "Distanza statica"
+#define D_DETECT_DISTANCE      "Rileva distanza"
 #define D_DISTANCE             "Distanza"
 #define D_DNS_SERVER           "Server DNS"
 #define D_DO                   "Ossigeno dissolto"
@@ -100,6 +105,7 @@
 #define D_FALLBACK_TOPIC       "Topic Riserva"
 #define D_FALSE                "Falso"
 #define D_FILE                 "File"
+#define D_FILE_SYSTEM_SIZE     "Dimensione file system"
 #define D_FLOW_RATE            "Flusso dati"
 #define D_FRAGMENTATION        "framm."      // Lower case abbreviated version of fragmentation used in "memory fragmentation"
 #define D_FRAME_RATE           "Frequenza fotogrammi"
@@ -130,6 +136,7 @@
 #define D_MULTI_PRESS          "multi-pressione"
 #define D_NOISE                "Rumore"
 #define D_NONE                 "Nessuno"
+#define D_NOX                  "NOx"
 #define D_O2                   "Ossigeno"
 #define D_OFF                  "OFF"
 #define D_OFFLINE              "Offline"
@@ -145,6 +152,7 @@
 #define D_POWER_FACTOR         "Fattore di potenza"
 #define D_POWERUSAGE           "Potenza"
 #define D_POWERUSAGE_ACTIVE    "Potenza attiva"
+#define D_POWERUSAGE_ACTIVE_TOTAL "Potenza attiva totale"
 #define D_POWERUSAGE_APPARENT  "Potenza apparente"
 #define D_POWERUSAGE_REACTIVE  "Potenza reattiva"
 #define D_PRESSURE             "Pressione"
@@ -181,6 +189,9 @@
 #define D_TRANSMIT             "Trasmessi"
 #define D_TRUE                 "Vero"
 #define D_TVOC                 "TVOC"
+#define D_TWILIGHT_ASTRONOMICAL "astronomico"
+#define D_TWILIGHT_CIVIL       "civile"
+#define D_TWILIGHT_NAUTICAL    "nautico"
 #define D_UPGRADE              "aggiornamento"
 #define D_UPLOAD               "Caricamento"
 #define D_UPTIME               "Tempo accensione"
@@ -198,6 +209,7 @@
 #define D_UV_LEVEL             "Livello UV"
 #define D_UV_POWER             "Intensità UV"
 #define D_VERSION              "Versione"
+#define D_VOC                  "VOC"
 #define D_VOLTAGE              "Tensione"
 #define D_VOLUME               "Volume"
 #define D_WEIGHT               "Peso"
@@ -295,6 +307,7 @@
 #define D_REFRESH_TO_SCAN_AGAIN          "Aggiorna per nuova scansione"
 #define D_DUPLICATE_ACCESSPOINT          "Access Point duplicato"
 #define D_SKIPPING_LOW_QUALITY           "Ignorato a causa di bassa qualità"
+#define D_MODE                           "Modalità"
 #define D_RSSI                           "RSSI"
 #define D_WEP                            "WEP"
 #define D_WPA_PSK                        "WPA PSK"
@@ -511,6 +524,11 @@
 #define D_ZIGBEE_EEPROM_FOUND_AT_ADDRESS     "Trovata EEPROM ZBBridge all'indirizzo"
 #define D_ZIGBEE_RANDOMIZING_ZBCONFIG        "Randomizzazione parametri Zigbee, controlla con \"ZbConfig\""
 
+// xdrv_89_dali.ino
+#define D_SENSOR_DALI_RX                  "Dali - RX"
+#define D_SENSOR_DALI_TX                  "Dali - TX"
+#define D_CONFIGURE_DALI                  "DALI - Config"
+
 // xdrv_03_energy.ino
 #define D_ENERGY_TODAY      "Energia - oggi"
 #define D_ENERGY_YESTERDAY  "Energia  - ieri"
@@ -639,6 +657,8 @@
 #define D_SENSOR_I2S_BCLK_IN            "I2S - WS IN"
 #define D_SENSOR_I2S_DIN                "I2S - DIN"
 #define D_SENSOR_I2S_DOUT               "I2S - DOUT"
+#define D_SENSOR_I2S_DAC                "I2S - DAC"
+#define D_SENSOR_HDMI_CEC               "HDMI CEC"
 #define D_SENSOR_WS2812                 "WS2812"
 #define D_SENSOR_DFR562                 "Riproduttore MP3"
 #define D_SENSOR_DFR562_BUSY            "MP3 occupato"
@@ -655,6 +675,7 @@
 #define D_SENSOR_IRRECV                 "IR - RX"
 #define D_SENSOR_MHZ_RX                 "MHZ - RX"
 #define D_SENSOR_MHZ_TX                 "MHZ - TX"
+#define D_SENSOR_HC8_RX                 "HC8 - RX"
 #define D_SENSOR_PZEM004_RX             "PZEM004 - RX"
 #define D_SENSOR_PZEM016_RX             "PZEM016 - RX"
 #define D_SENSOR_PZEM017_RX             "PZEM017 - RX"
@@ -683,10 +704,12 @@
 #define D_SENSOR_SBR_TX                 "SerBr - TX"
 #define D_SENSOR_MBR_TX                 "ModBr - TX"
 #define D_SENSOR_MBR_RX                 "ModBr - RX"
+#define D_SENSOR_MBR_TX_ENA             "ModBr - TX ON"
 #define D_SENSOR_SR04_TRIG              "SR04 Tri - TX"
 #define D_SENSOR_SR04_ECHO              "SR04 Ech - RX"
-#define D_SENSOR_NRG_MBS_TX             "NrgModbus - TX"
-#define D_SENSOR_NRG_MBS_RX             "NrgModbus - RX"
+#define D_SENSOR_NRG_MBS_TX             "NrgMbs - TX"
+#define D_SENSOR_NRG_MBS_RX             "NrgMbs - RX"
+#define D_SENSOR_NRG_MBS_TX_ENA         "NrgMbs - TX ON"
 #define D_SENSOR_SDM72_TX               "SDM72 - TX"
 #define D_SENSOR_SDM72_RX               "SDM72 - RX"
 #define D_SENSOR_SDM120_TX              "SDMx20 - TX"
@@ -697,6 +720,8 @@
 #define D_SENSOR_SDM630_RX              "SDM630 - RX"
 #define D_SENSOR_WE517_TX               "WE517 - TX"
 #define D_SENSOR_WE517_RX               "WE517 - RX"
+#define D_SENSOR_LD2410_TX              "LD2410 - TX"
+#define D_SENSOR_LD2410_RX              "LD2410 - RX"
 #define D_GPIO_TM1621_CS                "TM1621 - CS"
 #define D_GPIO_TM1621_WR                "TM1621 - WR"
 #define D_GPIO_TM1621_RD                "TM1621 - RD"
@@ -766,6 +791,7 @@
 #define D_SENSOR_ADE7880_IRQ            "ADE7880 - IRQ"
 #define D_SENSOR_ADE7953_IRQ            "ADE7953 - IRQ"
 #define D_SENSOR_ADE7953_RST            "ADE7953 - RST"
+#define D_SENSOR_ADE7953_CS             "ADE7953 - CS"
 #define D_SENSOR_BUZZER                 "Cicalino"
 #define D_SENSOR_DISP_RESET             "Display - RESET"
 #define D_SENSOR_ZIGBEE_TXD             "Zigbee - TX"
@@ -786,6 +812,8 @@
 #define D_SENSOR_OUTPUT_LO              "Uscita - Lo"
 #define D_SENSOR_AS608_TX               "AS608 - TX"
 #define D_SENSOR_AS608_RX               "AS608 - RX"
+#define D_SENSOR_GM861_TX               "GM861 - TX"
+#define D_SENSOR_GM861_RX               "GM861 - RX"
 #define D_SENSOR_DDS2382_TX             "DDS238-2 - TX"
 #define D_SENSOR_DDS2382_RX             "DDS238-2 - RX"
 #define D_SENSOR_DDSU666_TX             "DDSU666 - TX"
@@ -794,6 +822,8 @@
 #define D_SENSOR_SM2135_DAT             "SM2135 - DATI"
 #define D_SENSOR_SM2335_CLK             "SM2335 - CLK"
 #define D_SENSOR_SM2335_DAT             "SM2335 - DATI"
+#define D_SENSOR_BP1658CJ_CLK           "BP1658CJ - CLK"
+#define D_SENSOR_BP1658CJ_DAT           "BP1658CJ - DATI"
 #define D_SENSOR_BP5758D_CLK            "BP5758D - CLK"
 #define D_SENSOR_BP5758D_DAT            "BP5758D - DATI"
 #define D_SENSOR_DEEPSLEEP              "Sleep profondo"
@@ -882,6 +912,9 @@
 #define D_SENSOR_ZEROCROSS              "Impulsi ZC"
 #define D_SENSOR_HALLEFFECT             "Effetto hall"
 #define D_SENSOR_EPD_DATA               "EPD - Dati"
+#define D_SENSOR_PCF8574_INT            "PCF8574 - Int"
+#define D_SENSOR_MCP23XXX_INT           "MCP23xxx - Int"
+#define D_SENSOR_MCP23SXX_CS            "MCP23Sxx - CS"
 #define D_SENSOR_MCP2515_CS             "MCP2515 - CS"
 #define D_SENSOR_HRG15_RX               "HRG15 - RX"
 #define D_SENSOR_HRG15_TX               "HRG15 - TX"
@@ -894,9 +927,23 @@
 #define D_GPIO_SHIFT595_RCLK            "74x595 - RCLK"
 #define D_GPIO_SHIFT595_OE              "74x595 - OE"
 #define D_GPIO_SHIFT595_SER             "74x595 - SER"
+#define D_GPIO_DINGTIAN_CLK             "Dingtian - CLK"
+#define D_GPIO_DINGTIAN_SDI             "Dingtian - SDI"
+#define D_GPIO_DINGTIAN_Q7              "Dingtian - Q7"
+#define D_GPIO_DINGTIAN_PL              "Dingtian - PL"
+#define D_GPIO_DINGTIAN_OE              "Dingtian - OE"
+#define D_GPIO_DINGTIAN_RCK             "Dingtian - RCK"
 #define D_SENSOR_CM11_TX                "CM110x - TX"
 #define D_SENSOR_CM11_RX                "CM110x - RX"
 #define D_SENSOR_FLOWRATEMETER          "Portata"
+#define D_SENSOR_ME007_TRIG             "ME007 - Tri"
+#define D_SENSOR_ME007_RX               "ME007 - RX"
+#define D_SENSOR_TUYAMCUBR_TX           "TuyaMCUBr - TX"
+#define D_SENSOR_TUYAMCUBR_RX           "TuyaMCUBr - RX"
+#define D_SENSOR_BIOPDU_PZEM0XX_TX      "BioPDU PZEM0XX - TX"
+#define D_SENSOR_BIOPDU_PZEM016_RX      "BioPDU PZEM016 - RX"
+#define D_SENSOR_BIOPDU_BIT             "BioPDU Bit"
+#define D_SENSOR_LOX_O2_RX              "LoxO2 - RX"
 
 // Units
 #define D_UNIT_AMPERE                     "A"
@@ -909,6 +956,7 @@
 #define D_UNIT_HOUR                       "o"
 #define D_UNIT_GALLONS                    "gal"
 #define D_UNIT_GALLONS_PER_MIN            "g/m"
+#define D_UNIT_GRAM_PER_CUBIC_METER       "g/m³"
 #define D_UNIT_INCH_MERCURY               "inHg"
 #define D_UNIT_INCREMENTS                 "inc"
 #define D_UNIT_KELVIN                     "K"
@@ -1155,5 +1203,9 @@
 #define D_NEOPOOL_PH_HIGH                 "troppo alto"       // ph Alarms
 #define D_NEOPOOL_PH_LOW                  "troppo basso"
 #define D_NEOPOOL_PUMP_TIME_EXCEEDED      "tempo pompa superato"
+
+// xsns_106_gdk101.ino
+#define D_AVG_RAD_DOSE                    "Dose media radiazioni"
+#define D_UNIT_US_H                       "µSv/h"
 
 #endif  // _LANGUAGE_IT_IT_H_

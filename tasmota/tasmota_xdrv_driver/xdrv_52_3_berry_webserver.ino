@@ -70,7 +70,14 @@ extern "C" {
  * import webserver
  * 
 \*********************************************************************************************/
+
+#define WEBSERVER_REQ_HANDLER_HOOK_MAX       16      // max number of callbacks, each callback requires a distinct address
+static String be_webserver_prefix[WEBSERVER_REQ_HANDLER_HOOK_MAX];
+static uint8_t be_webserver_method[WEBSERVER_REQ_HANDLER_HOOK_MAX];
+
 extern "C" {
+  typedef void (*berry_webserver_cb_t)(void);
+  extern berry_webserver_cb_t be_webserver_allocate_hook(bvm *vm, int32_t num, bvalue *f);
   // Berry: `webserver.on(prefix:string, callback:closure) -> nil`
   //
   // WARNING - this should be called only when receiving `web_add_handler` event.
@@ -88,27 +95,40 @@ extern "C" {
         method = be_toint(vm, 3);
       }
 
-      be_getglobal(vm, PSTR("tasmota"));
-      if (!be_isnil(vm, -1)) {
-        be_getmethod(vm, -1, PSTR("gen_cb"));
-        if (!be_isnil(vm, -1)) {
-          be_pushvalue(vm, -2); // add instance as first arg
-          be_pushvalue(vm, 2);  // push closure as second arg
-          be_pcall(vm, 2);   // 2 arguments
-          be_pop(vm, 2);
+      // find if the prefix/method is already defined
+      int32_t slot;
+      for (slot = 0; slot < WEBSERVER_REQ_HANDLER_HOOK_MAX; slot++) {
+        // AddLog(LOG_LEVEL_INFO, ">>>: slot [%i] prefix='%s' method=%i", slot, be_webserver_prefix[slot] ? be_webserver_prefix[slot].c_str() : "<empty>", be_webserver_method[slot]);
+        if (be_webserver_prefix[slot] == prefix && be_webserver_method[slot] == method) {
+          break;
+        }
+      }
 
-          if (be_iscomptr(vm, -1)) {  // sanity check
-            const void * cb = be_tocomptr(vm, -1);
-            // All good, we can proceed
-
-            WebServer_on(prefix, (void (*)()) cb, method);
-            be_return_nil(vm);    // return, all good
+      if (slot >= WEBSERVER_REQ_HANDLER_HOOK_MAX) {
+        // we didn't find a duplicate, let's find a free slot
+        for (slot = 0; slot < WEBSERVER_REQ_HANDLER_HOOK_MAX; slot++) {
+          // AddLog(LOG_LEVEL_INFO, ">>>2: slot [%i] prefix='%s' method=%i", slot, be_webserver_prefix[slot] ? be_webserver_prefix[slot].c_str() : "<empty>", be_webserver_method[slot]);
+          if (be_webserver_prefix[slot].equals("")) {
+            break;
           }
         }
-        be_pop(vm, 1);
+        if (slot >= WEBSERVER_REQ_HANDLER_HOOK_MAX) {
+          be_raise(vm, "internal_error", "no more slots for webserver hooks");
+        }
       }
-      // be_pop(vm, 1);   // not really useful since we raise an exception anyways
-      be_raise(vm, kInternalError, nullptr);
+      // AddLog(LOG_LEVEL_INFO, ">>>: slot found = %i", slot);
+
+      bvalue *v = be_indexof(vm, 2);
+      if (be_isgcobj(v)) {
+        be_gc_fix_set(vm, v->v.gc, btrue);    // mark the function as non-gc
+      }
+      berry_webserver_cb_t cb = be_webserver_allocate_hook(vm, slot, v);
+      if (cb == NULL) { be_raise(vm, kInternalError, nullptr); }
+      be_webserver_prefix[slot] = prefix;
+      be_webserver_method[slot] = method;
+
+      WebServer_on(prefix, cb, method);
+      be_return_nil(vm);    // return, all good
     }
     be_raise(vm, kTypeError, nullptr);
   }
@@ -138,13 +158,12 @@ extern "C" {
       const char * uri = be_tostring(vm, 1);
       Webserver->sendHeader("Location", uri, true);
       Webserver->send(302, "text/plain", "");
-      // Webserver->sendHeader(F("Location"), String(F("http://")) + Webserver->client().localIP().toString(), true);
       be_return_nil(vm);
     }
     be_raise(vm, kTypeError, nullptr);
   }
 
-  // Berry: `webserver.content_start() -> nil`
+  // Berry: `webserver.content_start(title:string) -> nil`
   //
   int32_t w_webserver_content_start(struct bvm *vm);
   int32_t w_webserver_content_start(struct bvm *vm) {
@@ -157,13 +176,36 @@ extern "C" {
     be_raise(vm, kTypeError, nullptr);
   }
 
+  // Berry: `webserver.content_open(http_code:int, mimetype:string) -> nil`
+  //
+  int32_t w_webserver_content_open(struct bvm *vm);
+  int32_t w_webserver_content_open(struct bvm *vm) {
+    int32_t argc = be_top(vm); // Get the number of arguments
+    if (argc >= 2 && be_isint(vm, 1) && be_isstring(vm, 2)) {
+      int32_t httpcode = be_toint(vm, 1);
+      const char * mimetype = be_tostring(vm, 2);
+      Webserver->client().flush();
+      WSHeaderSend();
+      Webserver->setContentLength(CONTENT_LENGTH_UNKNOWN);
+      Webserver->send(httpcode, mimetype, "");
+      Web.chunk_buffer = "";
+      be_return_nil(vm);
+    }
+    be_raise(vm, kTypeError, nullptr);
+  }
+
   // Berry: `webserver.content_send(string) -> nil`
   //
   int32_t w_webserver_content_send(struct bvm *vm);
   int32_t w_webserver_content_send(struct bvm *vm) {
     int32_t argc = be_top(vm); // Get the number of arguments
-    if (argc >= 1 && be_isstring(vm, 1)) {
-      const char * html = be_tostring(vm, 1);
+    if (argc >= 1 && (be_isstring(vm, 1) || be_iscomptr(vm, 1))) {
+      const char * html;
+      if (be_isstring(vm, 1)) {
+        html = be_tostring(vm, 1);
+      } else {
+        html = (const char*) be_tocomptr(vm, 1);
+      }
       WSContentSend_P(PSTR("%s"), html);
       be_return_nil(vm);
     }
@@ -220,6 +262,20 @@ extern "C" {
       }
       WSContentSpaceButton(button);
       be_return_nil(vm);
+    }
+    be_raise(vm, kTypeError, nullptr);
+  }
+
+  // Berry: `webserver.html_escape(string) -> string`
+  //
+  int32_t w_webserver_html_escape(struct bvm *vm);
+  int32_t w_webserver_html_escape(struct bvm *vm) {
+    int32_t argc = be_top(vm); // Get the number of arguments
+    if (argc >= 1 && be_isstring(vm, 1)) {
+      const char * text = be_tostring(vm, 1);
+      String html = HtmlEscape(text);
+      be_pushstring(vm, html.c_str());
+      be_return(vm);
     }
     be_raise(vm, kTypeError, nullptr);
   }

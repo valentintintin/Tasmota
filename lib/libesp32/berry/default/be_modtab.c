@@ -50,6 +50,8 @@ be_extern_native_module(partition_core);
 be_extern_native_module(crc);
 be_extern_native_module(crypto);
 be_extern_native_module(ULP);
+be_extern_native_module(TFL);
+be_extern_native_module(mdns);
 #ifdef USE_ZIGBEE
 be_extern_native_module(zigbee);
 #endif // USE_ZIGBEE
@@ -64,13 +66,16 @@ be_extern_native_module(lv_tasmota);
 be_extern_native_module(haspmota);
 #endif // USE_LVGL_HASPMOTA
 #endif // USE_LVGL
+#ifdef USE_MATTER_DEVICE
+be_extern_native_module(matter);
+#endif // USE_MATTER_DEVICE
 
 /* user-defined modules declare start */
 
 /* user-defined modules declare end */
 
 /* module list declaration */
-BERRY_LOCAL const bntvmodule* const be_module_table[] = {
+BERRY_LOCAL const bntvmodule_t* const be_module_table[] = {
 /* default modules register */
 #if BE_USE_STRING_MODULE
     &be_native_module(string),
@@ -163,21 +168,29 @@ BERRY_LOCAL const bntvmodule* const be_module_table[] = {
     &be_native_module(flash),
     &be_native_module(partition_core),
     &be_native_module(crc),
-#ifdef USE_ALEXA_AVS
     &be_native_module(crypto),
-#endif
-#if defined(USE_BERRY_ULP) && defined(CONFIG_IDF_TARGET_ESP32)
+#if defined(USE_BERRY_ULP) && ((CONFIG_IDF_TARGET_ESP32) || defined(CONFIG_IDF_TARGET_ESP32S2) || defined(CONFIG_IDF_TARGET_ESP32S3))
     &be_native_module(ULP),
 #endif // USE_BERRY_ULP
+#if defined(USE_BERRY_TF_LITE)
+    &be_native_module(TFL),
+#endif //USE_BERRY_TF_LITE
 #if defined(USE_MI_ESP32) && !defined(USE_BLE_ESP32)
     &be_native_module(MI32),
     &be_native_module(BLE),
 #endif //USE_MI_ESP32
+#ifdef USE_DISCOVERY
+    &be_native_module(mdns),
+#endif // USE_DISCOVERY
+#ifdef USE_MATTER_DEVICE
+    &be_native_module(matter),
+#endif // USE_MATTER_DEVICE
 #endif // TASMOTA
     /* user-defined modules register end */
     NULL /* do not remove */
 };
 
+be_extern_native_class(dyn);
 be_extern_native_class(tasmota);
 be_extern_native_class(Trigger);
 be_extern_native_class(Driver);
@@ -195,7 +208,6 @@ be_extern_native_class(OneWire);
 be_extern_native_class(Leds_ntv);
 be_extern_native_class(Leds);
 be_extern_native_class(Leds_animator);
-be_extern_native_class(AudioOutput);
 be_extern_native_class(AudioGenerator);
 be_extern_native_class(AudioFileSource);
 be_extern_native_class(AudioOutputI2S);
@@ -203,10 +215,12 @@ be_extern_native_class(AudioGeneratorWAV);
 be_extern_native_class(AudioGeneratorMP3);
 be_extern_native_class(AudioFileSourceFS);
 be_extern_native_class(AudioOpusDecoder);
+be_extern_native_class(AudioInputI2S);
 be_extern_native_class(md5);
 be_extern_native_class(udp);
 be_extern_native_class(webclient);
 be_extern_native_class(tcpclient);
+be_extern_native_class(tcpclientasync);
 be_extern_native_class(tcpserver);
 be_extern_native_class(energy_struct);
 // LVGL core classes
@@ -228,6 +242,7 @@ be_extern_native_class(int64);
 BERRY_LOCAL bclass_array be_class_table = {
 #ifdef TASMOTA
     /* first list are direct classes */
+    &be_native_class(dyn),
     &be_native_class(tasmota),
     &be_native_class(Trigger),
     &be_native_class(Driver),
@@ -253,6 +268,7 @@ BERRY_LOCAL bclass_array be_class_table = {
     &be_native_class(udp),
     &be_native_class(webclient),
     &be_native_class(tcpclient),
+    &be_native_class(tcpclientasync),
 #endif // USE_WEBCLIENT
 #ifdef USE_BERRY_TCPSERVER
     &be_native_class(tcpserver),
@@ -279,8 +295,7 @@ BERRY_LOCAL bclass_array be_class_table = {
     &be_native_class(lv_clock_icon),
 #endif // USE_LVGL
 
-#ifdef USE_I2S_AUDIO_BERRY
-    &be_native_class(AudioOutput),
+#if defined(USE_I2S_AUDIO_BERRY) && (ESP_IDF_VERSION_MAJOR >= 5)
     &be_native_class(AudioGenerator),
     &be_native_class(AudioFileSource),
     &be_native_class(AudioOutputI2S),
@@ -290,8 +305,9 @@ BERRY_LOCAL bclass_array be_class_table = {
     &be_native_class(AudioFileSourceFS),
 #endif // USE_UFILESYS
     &be_native_class(AudioOpusDecoder),
-#endif // USE_I2S_AUDIO_BERRY
-#ifdef USE_BERRY_INT64
+    &be_native_class(AudioInputI2S),
+#endif // defined(USE_I2S_AUDIO_BERRY) && (ESP_IDF_VERSION_MAJOR >= 5)
+#if defined(USE_BERRY_INT64) || defined(USE_MATTER_DEVICE)
     &be_native_class(int64),
 #endif
 #endif // TASMOTA

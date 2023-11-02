@@ -31,9 +31,16 @@ struct MY92X1 {
   uint8_t model = 0;
 } My92x1;
 
+#if ESP_IDF_VERSION_MAJOR >= 5
+#include "rom/ets_sys.h"
+#ifndef os_delay_us
+#define os_delay_us ets_delay_us
+#endif //os_delay_us
+#else
 extern "C" {
   void os_delay_us(unsigned int);
 }
+#endif
 
 void LightDiPulse(uint8_t times)
 {
@@ -148,7 +155,7 @@ void My92x1ModuleSelected(void)
  * Interface
 \*********************************************************************************************/
 
-bool Xlgt02(uint8_t function)
+bool Xlgt02(uint32_t function)
 {
   bool result = false;
 

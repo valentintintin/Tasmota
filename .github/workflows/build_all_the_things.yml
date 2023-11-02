@@ -28,7 +28,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
       - name: Install dependencies
         run: |
           pip install wheel
@@ -44,7 +46,7 @@ jobs:
           path: ./build_output
 
   os-check-mac:
-    runs-on: macos-latest
+    runs-on: macOS-12
     if: github.repository == 'arendst/Tasmota'
     strategy:
       fail-fast: true
@@ -54,7 +56,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
       - name: Install dependencies
         run: |
           pip install wheel
@@ -77,7 +81,7 @@ jobs:
       matrix:
         variant:
           - tasmota
-          - tasmota4M
+          - tasmota-4M
           - tasmota-display
           - tasmota-ir
           - tasmota-knx
@@ -87,6 +91,7 @@ jobs:
           - tasmota-zbbridge
           - tasmota32
           - tasmota32c3
+          - tasmota32c6cdc-arduino30
           - tasmota32s2
           - tasmota32s3
           - tasmota32-zbbrdgpro
@@ -108,10 +113,15 @@ jobs:
           - tasmota32s2cdc-safeboot
           - tasmota32s3-safeboot
           - tasmota32s3cdc-safeboot
+          - tasmota32c2-safeboot
+          - tasmota32c6-safeboot
+          - tasmota32c6cdc-safeboot
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
       - name: Install dependencies
         run: |
           pip install wheel
@@ -119,6 +129,7 @@ jobs:
           pip install -U platformio
           #platformio upgrade --dev
           #platformio update
+          cp ./platformio_tasmota_core3_env_sample.ini ./platformio_tasmota_core3_env.ini
       - name: Run PlatformIO
         run: platformio run -e ${{ matrix.variant }}
       - uses: actions/upload-artifact@v3
@@ -137,7 +148,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
       - name: Install dependencies
         run: |
           pip install wheel

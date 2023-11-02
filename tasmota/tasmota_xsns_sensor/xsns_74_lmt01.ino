@@ -32,18 +32,18 @@
 bool lmt01_initialized = false;
 float lmt01_temperature = NAN;
 
+volatile int lmt01_pulseCount = 0;
+
+static void IRAM_ATTR LMT01_countPulse(void) {
+  lmt01_pulseCount++;
+}
+
 void LMT01_Init(void) {
   if (PinUsed(GPIO_LMT01)) {
     pinMode(Pin(GPIO_LMT01), INPUT);
     attachInterrupt(Pin(GPIO_LMT01), LMT01_countPulse, FALLING);
     lmt01_initialized = true;
   }
-}
-
-volatile int lmt01_pulseCount = 0;
-
-void IRAM_ATTR LMT01_countPulse(void) {
-  lmt01_pulseCount++;
 }
 
 void LMT01_GetTemperature(void) {
@@ -108,7 +108,7 @@ void LMT01_Show(bool Json) {
  * Interface
 \*********************************************************************************************/
 
-bool Xsns74(uint8_t function)
+bool Xsns74(uint32_t function)
 {
   bool result = false;
 

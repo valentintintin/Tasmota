@@ -4,6 +4,8 @@
 \********************************************************************/
 #include "be_constobj.h"
 
+extern const bclass be_class_Animate_rotate;
+
 /********************************************************************
 ** Solidified function: init
 ********************************************************************/
@@ -75,6 +77,8 @@ be_local_class(Animate_rotate,
     (bstring*) &be_const_str_Animate_rotate
 );
 
+extern const bclass be_class_Animate_from_to;
+
 /********************************************************************
 ** Solidified function: init
 ********************************************************************/
@@ -134,6 +138,8 @@ be_local_class(Animate_from_to,
     })),
     (bstring*) &be_const_str_Animate_from_to
 );
+
+extern const bclass be_class_Animate_back_forth;
 
 /********************************************************************
 ** Solidified function: init
@@ -216,6 +222,8 @@ be_local_class(Animate_back_forth,
     (bstring*) &be_const_str_Animate_back_forth
 );
 
+extern const bclass be_class_Animate_ins_goto;
+
 /********************************************************************
 ** Solidified function: init
 ********************************************************************/
@@ -263,6 +271,8 @@ be_local_class(Animate_ins_goto,
     (bstring*) &be_const_str_Animate_ins_goto
 );
 
+extern const bclass be_class_Animate_ins_ramp;
+
 /********************************************************************
 ** Solidified function: init
 ********************************************************************/
@@ -309,6 +319,8 @@ be_local_class(Animate_ins_ramp,
     })),
     (bstring*) &be_const_str_Animate_ins_ramp
 );
+
+extern const bclass be_class_Animate_engine;
 
 /********************************************************************
 ** Solidified function: run
@@ -588,9 +600,9 @@ be_local_closure(Animate_engine_animate,   /* name */
       0x140C0706,  //  0018  LT	R3	R3	K6
       0x780E0000,  //  0019  JMPF	R3	#001B
       0xB0060F08,  //  001A  RAISE	1	K7	K8
-      0x880C0104,  //  001B  GETMBR	R3	R0	K4
-      0x88100105,  //  001C  GETMBR	R4	R0	K5
-      0x940C0803,  //  001D  GETIDX	R3	R4	R3
+      0x880C0105,  //  001B  GETMBR	R3	R0	K5
+      0x88100104,  //  001C  GETMBR	R4	R0	K4
+      0x940C0604,  //  001D  GETIDX	R3	R3	R4
       0x6014000F,  //  001E  GETGBL	R5	G15
       0x5C180600,  //  001F  MOVE	R6	R3
       0xB81E1200,  //  0020  GETNGBL	R7	K9

@@ -25,6 +25,11 @@
 /*********************************************************************************************\
  * Support the following Shangai Belling energy sensors:
  *
+ * BL0942 - Energy (as in Shelly Plus1PMMini)
+ * Template {"NAME":"Shelly Plus1PMMini","GPIO":[576,32,0,4736,0,224,3200,8161,0,0,192,0,0,0,0,0,0,0,0,0,0,0],"FLAG":0,"BASE":1,"CMND":"AdcParam1 2,5600,4700,3350}
+ * Template {"NAME":"Shelly PlusPMMini","GPIO":[576,32,0,4736,0,0,3200,8161,0,0,0,0,0,0,0,0,0,0,0,0,0,0],"FLAG":0,"BASE":1,"CMND":"AdcParam1 2,5600,4700,3350}
+ * Based on datasheet from https://datasheet.lcsc.com/lcsc/2110191830_BL-Shanghai-Belling-BL0942_C2909509.pdf
+ * 
  * BL0940 - Energy (as in Blitzwolf SHP10)
  * Template {"NAME":"BW-SHP10","GPIO":[0,148,0,207,158,21,0,0,0,17,0,0,0],"FLAG":0,"BASE":18}
  * Based on datasheet from http://www.belling.com.cn/media/file_object/bel_product/BL09XX/datasheet/BL09XX_V1.1_en.pdf
@@ -85,10 +90,12 @@ const uint8_t  bl09xx_init[5][4] = {
 
 struct BL09XX {
   uint32_t voltage = 0;
+  uint32_t frequency = 0;
   uint32_t current[2] = { 0, };
   int32_t power[2] = { 0, };
   float temperature;
   uint16_t tps1 = 0;
+  uint16_t baudrate;
   uint8_t *rx_buffer = nullptr;
   uint8_t buffer_size = 0;
   uint8_t byte_counter = 0;
@@ -131,7 +138,7 @@ bool Bl09XXDecode3940(void) {
   Bl09XX.power[0]   = Bl09XX.rx_buffer[18] << 16 | Bl09XX.rx_buffer[17] << 8 | Bl09XX.rx_buffer[16];     // WATT_A signed
   if (bitRead(Bl09XX.power[0], 23)) { Bl09XX.power[0] |= 0xFF000000; }                                   // Extend sign bit
 
-  if (Energy.phase_count > 1) {
+  if (Energy->phase_count > 1) {
     Bl09XX.current[1] = Bl09XX.rx_buffer[9]  << 16 | Bl09XX.rx_buffer[8]  << 8 | Bl09XX.rx_buffer[7];    // IB_RMS unsigned
     Bl09XX.power[1]   = Bl09XX.rx_buffer[21] << 16 | Bl09XX.rx_buffer[20] << 8 | Bl09XX.rx_buffer[19];   // WATT_B signed
     if (bitRead(Bl09XX.power[1], 23)) { Bl09XX.power[1] |= 0xFF000000; }                                 // Extend sign bit
@@ -164,11 +171,19 @@ bool Bl09XXDecode42(void) {
   // U 3560882, I 47550, P 26409, C 153
   // All above from a single test with a 40W buld on 230V
 
+  // Shelly Plus1PMMini
+  //  0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22
+  // Hd Current- Voltage- IFRms--- Power--- CF------ Freq- 00 St 00 00 Ck
+  // 55 20 16 01 D2 A4 33 9B 63 00 9E 92 00 33 00 00 26 4E 00 20 01 00 7C
+  // 55 07 15 01 6A A7 33 C0 62 00 0E 92 00 34 00 00 26 4E 00 20 01 00 66
+  // 55 F0 15 01 E3 9C 33 4B 63 00 6E 92 00 34 00 00 26 4E 00 20 01 00 23
+
   if (Bl09XX.rx_buffer[0] != BL09XX_PACKET_HEADER) {
     AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("BL9: Invalid data hd=%02X"), Bl09XX.rx_buffer[0]);
     return false;
   }
 
+  Bl09XX.frequency  = Bl09XX.rx_buffer[17] << 8 | Bl09XX.rx_buffer[16];                                  // FREQ
   Bl09XX.voltage    = Bl09XX.rx_buffer[6] << 16 | Bl09XX.rx_buffer[5] << 8 | Bl09XX.rx_buffer[4];        // V_RMS unsigned
   Bl09XX.current[0] = Bl09XX.rx_buffer[3]  << 16 | Bl09XX.rx_buffer[2]  << 8 | Bl09XX.rx_buffer[1];      // IA_RMS unsigned
 
@@ -187,27 +202,34 @@ bool Bl09XXDecode42(void) {
 }
 
 void Bl09XXUpdateEnergy() {
-  if (Energy.power_on) {  // Powered on
-    Energy.voltage[0] = (float)Bl09XX.voltage / Settings->energy_voltage_calibration;
+  if (Energy->power_on) {  // Powered on
+    if (BL0942_MODEL == Bl09XX.model) {
+      Energy->frequency[0] = (float)1000000.0 / Bl09XX.frequency;  // Datasheet page 19 (v1.04)
+    }
+    Energy->voltage[0] = (float)Bl09XX.voltage / EnergyGetCalibration(ENERGY_VOLTAGE_CALIBRATION);
+    Energy->voltage[1] = Energy->voltage[0];
 #ifdef DEBUG_BL09XX
-    AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("BL9: U %2_f, T %2_f"), &Energy.voltage[0], &Bl09XX.temperature);
+    AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("BL9: U %2_f, T %2_f"), &Energy->voltage[0], &Bl09XX.temperature);
 #endif
-    for (uint32_t chan = 0; chan < Energy.phase_count; chan++) {
-      if (Bl09XX.power[chan] > Settings->energy_power_calibration) {                                     // We need at least 1W
-        Energy.active_power[chan] = (float)Bl09XX.power[chan] / Settings->energy_power_calibration;
-        Energy.current[chan] = (float)Bl09XX.current[chan] / Settings->energy_current_calibration;
+    for (uint32_t chan = 0; chan < Energy->phase_count; chan++) {
+      uint32_t power_calibration = EnergyGetCalibration(ENERGY_POWER_CALIBRATION, chan);
+      uint32_t current_calibration = EnergyGetCalibration(ENERGY_CURRENT_CALIBRATION, chan);
+      if (Bl09XX.power[chan] > power_calibration) {                                     // We need at least 1W
+        Energy->active_power[chan] = (float)Bl09XX.power[chan] / power_calibration;
+        Energy->current[chan] = (float)Bl09XX.current[chan] / current_calibration;
       } else {
-        Energy.active_power[chan] = 0;
-        Energy.current[chan] = 0;
+        Energy->active_power[chan] = 0;
+        Energy->current[chan] = 0;
       }
 #ifdef DEBUG_BL09XX
-      AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("BL9: Chan[%d] I %2_f, P %2_f"), chan, &Energy.current[chan], &Energy.active_power[chan]);
+      AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("BL9: Chan[%d] I %2_f, P %2_f"), chan, &Energy->current[chan], &Energy->active_power[chan]);
 #endif
     }
   } else {  // Powered off
-    Energy.voltage[0] = 0;
-    Energy.active_power[0] = Energy.active_power[1] = 0;
-    Energy.current[0] = Energy.current[1] = 0;
+    Energy->voltage[0] = 0;
+    Energy->voltage[1] = 0;
+    Energy->active_power[0] = Energy->active_power[1] = 0;
+    Energy->current[0] = Energy->current[1] = 0;
   }
 }
 
@@ -227,7 +249,7 @@ void Bl09XXSerialInput(void) {
         for (uint32_t i = 0; i < Bl09XX.buffer_size -1; i++) { checksum += Bl09XX.rx_buffer[i]; }
         checksum ^= 0xFF;
         if (checksum == Bl09XX.rx_buffer[Bl09XX.buffer_size -1]) {
-          Energy.data_valid[0] = 0;
+          Energy->data_valid[0] = 0;
           bool ok;
           if (BL0942_MODEL == Bl09XX.model) {
             ok = Bl09XXDecode42();
@@ -259,14 +281,14 @@ void Bl09XXSerialInput(void) {
 /********************************************************************************************/
 
 void Bl09XXEverySecond(void) {
-  if (Energy.data_valid[0] > ENERGY_WATCHDOG) {
+  if (Energy->data_valid[0] > ENERGY_WATCHDOG) {
     Bl09XX.voltage = 0;
     memset(Bl09XX.current, 0, sizeof(Bl09XX.current));
     memset(Bl09XX.power, 0, sizeof(Bl09XX.power));
   } else {
     // Calculate energy by using active power
-    for (uint32_t channel = 0; channel < Energy.phase_count; channel++) {
-      Energy.kWhtoday_delta[channel] += Energy.active_power[channel] * 1000 / 36;
+    for (uint32_t channel = 0; channel < Energy->phase_count; channel++) {
+      Energy->kWhtoday_delta[channel] += Energy->active_power[channel] * 1000 / 36;
     }
     EnergyUpdateToday();
   }
@@ -281,24 +303,27 @@ void Bl09XXEverySecond(void) {
 void Bl09XXInit(void) {
   // Software serial init needs to be done here as earlier (serial) interrupts may lead to Exceptions
   Bl09XXSerial = new TasmotaSerial(Bl09XX.rx_pin, Pin(GPIO_TXD), 1);
-  if (Bl09XXSerial->begin(4800)) {
+  if (Bl09XXSerial->begin(Bl09XX.baudrate)) {
     if (Bl09XXSerial->hardwareSerial()) {
       ClaimSerial();
     }
-    if (HLW_UREF_PULSE == Settings->energy_voltage_calibration) {
-      Settings->energy_voltage_calibration = bl09xx_uref[Bl09XX.model];
-      Settings->energy_current_calibration = bl09xx_iref[Bl09XX.model];
-      Settings->energy_power_calibration   = bl09xx_pref[Bl09XX.model];
+    if (HLW_UREF_PULSE == EnergyGetCalibration(ENERGY_VOLTAGE_CALIBRATION)) {
+      for (uint32_t i = 0; i < 2; i++) {
+        EnergySetCalibration(ENERGY_POWER_CALIBRATION, bl09xx_pref[Bl09XX.model], i);
+        EnergySetCalibration(ENERGY_VOLTAGE_CALIBRATION, bl09xx_uref[Bl09XX.model], i);
+        EnergySetCalibration(ENERGY_CURRENT_CALIBRATION, bl09xx_iref[Bl09XX.model], i);
+      }
     }
-    if ((BL0940_MODEL == Bl09XX.model) && (Settings->energy_current_calibration < (BL0940_IREF / 20))) {
-      Settings->energy_current_calibration *= 100;
+    if ((BL0940_MODEL == Bl09XX.model) && (EnergyGetCalibration(ENERGY_CURRENT_CALIBRATION) < (BL0940_IREF / 20))) {
+      uint32_t current_calibration = EnergyGetCalibration(ENERGY_CURRENT_CALIBRATION) * 100;
+      EnergySetCalibration(ENERGY_CURRENT_CALIBRATION, current_calibration);
     }
 
     if (BL0942_MODEL != Bl09XX.model) {
 #ifdef DEBUG_BL09XX
       AddLog(LOG_LEVEL_DEBUG, PSTR("BL9: Send Init string"));
 #endif
-      Energy.use_overtemp = true;                 // Use global temperature for overtemp detection
+      Energy->use_overtemp = true;                 // Use global temperature for overtemp detection
       for (uint32_t i = 0; i < 5; i++) {
         uint8_t crc, byte;
         crc = byte = BL09XX_WRITE_COMMAND | Bl09XX.address;
@@ -311,7 +336,7 @@ void Bl09XXInit(void) {
         delay(1);
       }
     } else {
-      Energy.use_overtemp = false;                 // Use global temperature for overtemp detection
+      Energy->use_overtemp = false;                 // Use global temperature for overtemp detection
     }
   } else {
     TasmotaGlobal.energy_driver = ENERGY_NONE;
@@ -321,6 +346,7 @@ void Bl09XXInit(void) {
 void Bl09XXPreInit(void) {
   if (PinUsed(GPIO_TXD)) {
     Bl09XX.model = BL09XX_MODEL;
+    Bl09XX.baudrate = 4800;
     if (PinUsed(GPIO_BL0939_RX)) {
       Bl09XX.model = BL0939_MODEL;
       Bl09XX.rx_pin = Pin(GPIO_BL0939_RX);
@@ -329,21 +355,23 @@ void Bl09XXPreInit(void) {
       Bl09XX.model = BL0940_MODEL;
       Bl09XX.rx_pin = Pin(GPIO_BL0940_RX);
     }
-    else if (PinUsed(GPIO_BL0942_RX)) {
+    else if (PinUsed(GPIO_BL0942_RX, GPIO_ANY)) {
       Bl09XX.model = BL0942_MODEL;
-      Bl09XX.rx_pin = Pin(GPIO_BL0942_RX);
+      Bl09XX.rx_pin = Pin(GPIO_BL0942_RX, GPIO_ANY);
+      uint32_t baudrate = GetPin(Bl09XX.rx_pin) - AGPIO(GPIO_BL0942_RX);  // 0 .. 3
+      Bl09XX.baudrate <<= baudrate;                  // Support 1 (4800), 2 (9600), 3 (19200), 4 (38400)
     }
     if (Bl09XX.model != BL09XX_MODEL) {
       Bl09XX.address = bl09xx_address[Bl09XX.model];
       Bl09XX.buffer_size = bl09xx_buffer_size[Bl09XX.model];
       Bl09XX.rx_buffer = (uint8_t*)(malloc(Bl09XX.buffer_size));
       if (Bl09XX.rx_buffer != nullptr) {
-        Energy.voltage_common = true;               // Use common voltage
-        Energy.frequency_common = true;             // Use common frequency
-        Energy.use_overtemp = true;                 // Use global temperature for overtemp detection
-        Energy.phase_count = bl09xx_phase_count[Bl09XX.model];  // Handle two channels as two phases
+        Energy->voltage_common = true;               // Use common voltage
+        Energy->frequency_common = true;             // Use common frequency
+        Energy->use_overtemp = true;                 // Use global temperature for overtemp detection
+        Energy->phase_count = bl09xx_phase_count[Bl09XX.model];  // Handle two channels as two phases
         TasmotaGlobal.energy_driver = XNRG_14;
-        AddLog(LOG_LEVEL_DEBUG,PSTR("BL9: Enabling BL09%02d"), bl09xx_type[Bl09XX.model]);
+        AddLog(LOG_LEVEL_DEBUG,PSTR("BL9: Enabling BL09%02d at %d bps"), bl09xx_type[Bl09XX.model], Bl09XX.baudrate);
       }
     }
   }
@@ -352,22 +380,22 @@ void Bl09XXPreInit(void) {
 bool Bl09XXCommand(void) {
   bool serviced = true;
 
-  uint32_t channel = (2 == XdrvMailbox.index) && (Energy.phase_count > 1) ? 1 : 0;
+  uint32_t channel = (2 == XdrvMailbox.index) && (Energy->phase_count > 1) ? 1 : 0;
   uint32_t value = (uint32_t)(CharToFloat(XdrvMailbox.data) * 100);  // 1.23 = 123
 
-  if (CMND_POWERSET == Energy.command_code) {
+  if (CMND_POWERSET == Energy->command_code) {
     if (XdrvMailbox.data_len && Bl09XX.power[channel]) {
-      Settings->energy_power_calibration = (Bl09XX.power[channel] * 100) / value;
+      XdrvMailbox.payload = (Bl09XX.power[channel] * 100) / value;
     }
   }
-  else if (CMND_VOLTAGESET == Energy.command_code) {
+  else if (CMND_VOLTAGESET == Energy->command_code) {
     if (XdrvMailbox.data_len && Bl09XX.voltage) {
-      Settings->energy_voltage_calibration = (Bl09XX.voltage * 100) / value;
+      XdrvMailbox.payload = (Bl09XX.voltage * 100) / value;
     }
   }
-  else if (CMND_CURRENTSET == Energy.command_code) {
+  else if (CMND_CURRENTSET == Energy->command_code) {
     if (XdrvMailbox.data_len && Bl09XX.current[channel]) {
-      Settings->energy_current_calibration = (Bl09XX.current[channel] * 100) / value;
+      XdrvMailbox.payload = (Bl09XX.current[channel] * 100) / value;
     }
   }
   else serviced = false;  // Unknown command
@@ -399,7 +427,7 @@ void Bl09XXShow(bool json) {
  * Interface
 \*********************************************************************************************/
 
-bool Xnrg14(uint8_t function) {
+bool Xnrg14(uint32_t function) {
   bool result = false;
 
   switch (function) {

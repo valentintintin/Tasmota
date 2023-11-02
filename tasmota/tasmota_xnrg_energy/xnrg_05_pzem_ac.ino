@@ -33,7 +33,7 @@
 #define XNRG_05                    5
 
 const uint8_t PZEM_AC_DEVICE_ADDRESS = 0x01;  // PZEM default address
-const uint32_t PZEM_AC_STABILIZE = 30;        // Number of seconds to stabilize configuration
+const uint32_t PZEM_AC_STABILIZE = 10;        // Number of seconds to stabilize 1 pzem
 
 #include <TasmotaModbus.h>
 TasmotaModbus *PzemAcModbus;
@@ -50,6 +50,7 @@ struct PZEMAC {
 void PzemAcEverySecond(void)
 {
   bool data_ready = PzemAcModbus->ReceiveReady();
+  uint16_t addr;
 
   if (data_ready) {
     uint8_t buffer[30];  // At least 5 + (2 * 10) = 25
@@ -65,21 +66,21 @@ void PzemAcEverySecond(void)
     if (error) {
       AddLog(LOG_LEVEL_DEBUG, PSTR("PAC: PzemAc %d error %d"), PZEM_AC_DEVICE_ADDRESS + PzemAc.phase, error);
     } else {
-      Energy.data_valid[PzemAc.phase] = 0;
+      Energy->data_valid[PzemAc.phase] = 0;
       if (10 == registers) {
 
         //           0     1     2     3     4     5     6     7     8     9           = ModBus register
         //  0  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24  = Buffer index
         // 01 04 14 08 D1 00 6C 00 00 00 F4 00 00 00 26 00 00 01 F4 00 64 00 00 51 34
         // Id Cc Sz Volt- Current---- Power------ Energy----- Frequ PFact Alarm Crc--
-        Energy.voltage[PzemAc.phase] = (float)((buffer[3] << 8) + buffer[4]) / 10.0f;                                                  // 6553.0 V
-        Energy.current[PzemAc.phase] = (float)((buffer[7] << 24) + (buffer[8] << 16) + (buffer[5] << 8) + buffer[6]) / 1000.0f;        // 4294967.000 A
-        Energy.active_power[PzemAc.phase] = (float)((buffer[11] << 24) + (buffer[12] << 16) + (buffer[9] << 8) + buffer[10]) / 10.0f;  // 429496729.0 W
-        Energy.frequency[PzemAc.phase] = (float)((buffer[17] << 8) + buffer[18]) / 10.0f;                                              // 50.0 Hz
-        Energy.power_factor[PzemAc.phase] = (float)((buffer[19] << 8) + buffer[20]) / 100.0f;                                          // 1.00
-        Energy.import_active[PzemAc.phase] = (float)((buffer[15] << 24) + (buffer[16] << 16) + (buffer[13] << 8) + buffer[14]) / 1000.0f;  // 4294967.295 kWh
-        if (PzemAc.phase == Energy.phase_count -1) {
-          if (TasmotaGlobal.uptime > PZEM_AC_STABILIZE) {
+        Energy->voltage[PzemAc.phase] = (float)((buffer[3] << 8) + buffer[4]) / 10.0f;                                                  // 6553.0 V
+        Energy->current[PzemAc.phase] = (float)((buffer[7] << 24) + (buffer[8] << 16) + (buffer[5] << 8) + buffer[6]) / 1000.0f;        // 4294967.000 A
+        Energy->active_power[PzemAc.phase] = (float)((buffer[11] << 24) + (buffer[12] << 16) + (buffer[9] << 8) + buffer[10]) / 10.0f;  // 429496729.0 W
+        Energy->frequency[PzemAc.phase] = (float)((buffer[17] << 8) + buffer[18]) / 10.0f;                                              // 50.0 Hz
+        Energy->power_factor[PzemAc.phase] = (float)((buffer[19] << 8) + buffer[20]) / 100.0f;                                          // 1.00
+        Energy->import_active[PzemAc.phase] = (float)((buffer[15] << 24) + (buffer[16] << 16) + (buffer[13] << 8) + buffer[14]) / 1000.0f;  // 4294967.295 kWh
+        if (PzemAc.phase == Energy->phase_count -1) {
+          if (TasmotaGlobal.uptime > (PZEM_AC_STABILIZE * ENERGY_MAX_PHASES)) {
             EnergyUpdateTotal();
           }
         }
@@ -89,13 +90,14 @@ void PzemAcEverySecond(void)
 
   if (0 == PzemAc.send_retry || data_ready) {
     if (0 == PzemAc.phase) {
-      PzemAc.phase = Energy.phase_count -1;
+      PzemAc.phase = Energy->phase_count -1;
     } else {
       PzemAc.phase--;
     }
     PzemAc.send_retry = ENERGY_WATCHDOG;
     if (ADDR_SEND == PzemAc.address_step) {
-      PzemAcModbus->Send(0xF8, 0x06, 0x0002, (uint16_t)PzemAc.address);
+      addr = PzemAc.address;
+      PzemAcModbus->Send(0xF8, 0x06, 0x0002, 1, (uint16_t *) &addr);
       PzemAc.address_step--;
     } else {
       PzemAcModbus->Send(PZEM_AC_DEVICE_ADDRESS + PzemAc.phase, 0x04, 0, 10);
@@ -103,8 +105,8 @@ void PzemAcEverySecond(void)
   }
   else {
     PzemAc.send_retry--;
-    if ((Energy.phase_count > 1) && (0 == PzemAc.send_retry) && (TasmotaGlobal.uptime < PZEM_AC_STABILIZE)) {
-      Energy.phase_count--;  // Decrement phases if no response after retry within 30 seconds after restart
+    if ((Energy->phase_count > 1) && (0 == PzemAc.send_retry) && (TasmotaGlobal.uptime < (PZEM_AC_STABILIZE * ENERGY_MAX_PHASES))) {
+      Energy->phase_count--;  // Decrement phases if no response after retry within 30 seconds after restart
       if (TasmotaGlobal.discovery_counter) {
         TasmotaGlobal.discovery_counter += ENERGY_WATCHDOG + 1;  // Don't send Discovery yet, delay by 4s + 1s
       }
@@ -114,11 +116,11 @@ void PzemAcEverySecond(void)
 
 void PzemAcSnsInit(void)
 {
-  PzemAcModbus = new TasmotaModbus(Pin(GPIO_PZEM016_RX), Pin(GPIO_PZEM0XX_TX));
+  PzemAcModbus = new TasmotaModbus(Pin(GPIO_PZEM016_RX), Pin(GPIO_PZEM0XX_TX), Pin(GPIO_NRG_MBS_TX_ENA));
   uint8_t result = PzemAcModbus->Begin(9600);
   if (result) {
     if (2 == result) { ClaimSerial(); }
-    Energy.phase_count = ENERGY_MAX_PHASES;  // Start off with three phases
+    Energy->phase_count = ENERGY_MAX_PHASES;  // Start off with three phases
     PzemAc.phase = 0;
   } else {
     TasmotaGlobal.energy_driver = ENERGY_NONE;
@@ -136,7 +138,7 @@ bool PzemAcCommand(void)
 {
   bool serviced = true;
 
-  if (CMND_MODULEADDRESS == Energy.command_code) {
+  if (CMND_MODULEADDRESS == Energy->command_code) {
     PzemAc.address = XdrvMailbox.payload;  // Valid addresses are 1, 2 and 3
     PzemAc.address_step = ADDR_SEND;
   }
@@ -149,7 +151,7 @@ bool PzemAcCommand(void)
  * Interface
 \*********************************************************************************************/
 
-bool Xnrg05(uint8_t function)
+bool Xnrg05(uint32_t function)
 {
   bool result = false;
 

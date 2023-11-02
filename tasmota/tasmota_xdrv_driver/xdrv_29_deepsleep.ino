@@ -1,7 +1,7 @@
 /*
   xdrv_29_deepsleep.ino - DeepSleep support for Tasmota
 
-  Copyright (C) 2022  Stefan Bode
+  Copyright (C) 2023  Stefan Bode
 
   This program is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -89,8 +89,9 @@ void DeepSleepReInit(void)
   RtcSettings.ultradeepsleep = 0;
 }
 
-void DeepSleepPrepare(void)
+void DeepSleepStart(void)
 {
+  char stopic[TOPSZ];
   // Deepsleep_slip is ideally 10.000 == 100%
   // Typically the device has up to 4% slip. Anything else is a wrong setting in the deepsleep_slip
   // Therefore all values >110% or <90% will be resetted to 100% to avoid crazy sleep times.
@@ -118,28 +119,28 @@ void DeepSleepPrepare(void)
     RtcSettings.deepsleep_slip = tmin(tmax(RtcSettings.deepsleep_slip, 9000), 11000);
   }
 
+//  AddLog(LOG_LEVEL_DEBUG, PSTR("DSL: Time %ld, next %ld, slip %ld"), timeslip, RtcSettings.nextwakeup, RtcSettings.deepsleep_slip );
   // It may happen that wakeup in just <5 seconds in future
   // In this case also add deepsleep to nextwakeup
   if (RtcSettings.nextwakeup <= (LocalTime() + DEEPSLEEP_MIN_TIME)) {
-    // ensure nextwakeup is at least in the future
+    // ensure nextwakeup is at least in the future, and add 5%
     RtcSettings.nextwakeup += (((LocalTime() + DEEPSLEEP_MIN_TIME - RtcSettings.nextwakeup) / Settings->deepsleep) + 1) * Settings->deepsleep;
+    RtcSettings.nextwakeup += Settings->deepsleep * 0.05;
+//    AddLog(LOG_LEVEL_DEBUG, PSTR("DSL: Time too short: time %ld, next %ld, slip %ld"), timeslip, RtcSettings.nextwakeup, RtcSettings.deepsleep_slip);
   }
 
   String dt = GetDT(RtcSettings.nextwakeup);  // 2017-03-07T11:08:02
+  if (Settings->flag3.time_append_timezone) {  // SetOption52 - Append timezone to JSON time
+    dt += GetTimeZone();    // 2017-03-07T11:08:02-07:00
+  }
   // Limit sleeptime to DEEPSLEEP_MAX_CYCLE
   // uint32_t deepsleep_sleeptime = DEEPSLEEP_MAX_CYCLE < (RtcSettings.nextwakeup - LocalTime()) ? (uint32_t)DEEPSLEEP_MAX_CYCLE : RtcSettings.nextwakeup - LocalTime();
   deepsleep_sleeptime = tmin((uint32_t)DEEPSLEEP_MAX_CYCLE ,RtcSettings.nextwakeup - LocalTime());
 
-  // stat/tasmota/DEEPSLEEP = {"DeepSleep":{"Time":"2019-11-12T21:33:45","Epoch":1573590825}}
-  Response_P(PSTR("{\"" D_PRFX_DEEPSLEEP "\":{\"" D_JSON_TIME "\":\"%s\",\"Epoch\":%d}}"), (char*)dt.c_str(), RtcSettings.nextwakeup);
-  MqttPublishPrefixTopicRulesProcess_P(RESULT_OR_STAT, PSTR(D_PRFX_DEEPSLEEP));
+  // Sending Deepsleep parameters to automation for react
+  Response_P(PSTR("{\"" D_PRFX_DEEPSLEEP "\":{\"" D_JSON_TIME "\":\"%s\",\"" D_PRFX_DEEPSLEEP "\":%d,\"Wakeup\":%d}}"), (char*)dt.c_str(), LocalTime(), RtcSettings.nextwakeup);
+  MqttPublishPrefixTopicRulesProcess_P(TELE, PSTR(D_PRFX_DEEPSLEEP), true);
 
-//  Response_P(S_LWT_OFFLINE);
-//  MqttPublishPrefixTopicRulesProcess_P(TELE, PSTR(D_LWT), true);  // Offline or remove previous retained topic
-}
-
-void DeepSleepStart(void)
-{
   WifiShutdown();
   RtcSettings.ultradeepsleep = RtcSettings.nextwakeup - LocalTime();
   RtcSettingsSave();
@@ -152,7 +153,9 @@ void DeepSleepStart(void)
   esp_deep_sleep_start();
 #endif  // ESP32
   yield();
+
 }
+
 
 void DeepSleepEverySecond(void)
 {
@@ -165,12 +168,8 @@ void DeepSleepEverySecond(void)
   if (!deepsleep_flag) { return; }
 
   if (DeepSleepEnabled()) {
-    if (DEEPSLEEP_START_COUNTDOWN == deepsleep_flag) {  // Allow 4 seconds to update web console before deepsleep
+    if (DEEPSLEEP_START_COUNTDOWN == deepsleep_flag) {  
       SettingsSaveAll();
-      DeepSleepPrepare();
-    }
-    deepsleep_flag--;
-    if (deepsleep_flag <= 0) {
       DeepSleepStart();
     }
   } else {
@@ -194,6 +193,7 @@ void CmndDeepsleepTime(void)
         Settings->tele_period = TELE_PERIOD;  // Need teleperiod to go back to sleep
       }
     }
+    TasmotaGlobal.discovery_counter = 1; // force TasDiscovery()
   }
   ResponseCmndNumber(Settings->deepsleep);
 }
@@ -202,7 +202,7 @@ void CmndDeepsleepTime(void)
  * Interface
 \*********************************************************************************************/
 
-bool Xdrv29(uint8_t function)
+bool Xdrv29(uint32_t function)
 {
   bool result = false;
 

@@ -30,6 +30,7 @@
 #define D_JSON_ACK "Ack"
 #define D_JSON_ACTIVE "Active"
 #define D_JSON_ADDRESS "Address"
+#define D_JSON_AHUM "aHumidity"
 #define D_JSON_AIRQUALITY "AirQuality"
 #define D_JSON_ANALOG_INPUT "Analog"
 #define D_JSON_AP "AP"                   // Access Point
@@ -100,9 +101,6 @@
 #define D_JSON_OTHER_HTTP_ERROR "Other http error"
 #define D_JSON_HSBCOLOR "HSBColor"
 #define D_JSON_HUMIDITY "Humidity"
-#define D_JSON_I2CSCAN_DEVICES_FOUND_AT "Device(s) found at"
-#define D_JSON_I2CSCAN_UNKNOWN_ERROR_AT "Unknown error at"
-#define D_JSON_I2CSCAN_NO_DEVICES_FOUND "No devices found"
 #define D_JSON_ID "Id"
 #define D_JSON_ILLUMINANCE "Illuminance"
 #define D_JSON_IMPORT_ACTIVE "ImportActive"
@@ -110,6 +108,8 @@
 #define D_JSON_IMPORT_REACTIVE "ImportReactive"
 #define D_JSON_INFRARED "Infrared"
 #define D_JSON_INVALID_FILE_TYPE "Invalid filetype or buffer"
+#define D_JSON_IP6_GLOBAL "IP6Global"
+#define D_JSON_IP6_LOCAL "IP6Local"
 #define D_JSON_UNKNOWN "Unknown"
 #define D_JSON_LIGHT "Light"
 #define D_JSON_LINK_COUNT "LinkCount"
@@ -123,6 +123,7 @@
 #define D_JSON_MODEL "Model"
 #define D_JSON_MOISTURE "Moisture"
 #define D_JSON_MQTT_COUNT "MqttCount"
+#define D_JSON_NULL "null"
 #define D_JSON_NO "No"
 #define D_JSON_NOISE "Noise"
 #define D_JSON_NONE "None"
@@ -237,6 +238,8 @@
 #define D_JSON_MY "YaxisInduction"
 #define D_JSON_MZ "ZaxisInduction"
 #define D_JSON_MAGNETICFLD "MagneticInduction"
+#define D_JSON_ALERT "Alert"
+#define D_JSON_BATTPERCENT "BatteryPercentage"
 #define D_RSLT_ENERGY "ENERGY"
 #define D_RSLT_HASS_STATE "HASS_STATE"
 #define D_RSLT_INFO "INFO"
@@ -247,6 +250,7 @@
 #define D_RSLT_STATE "STATE"
 #define D_RSLT_UPTIME "UPTIME"
 #define D_RSLT_WARNING "WARNING"
+#define D_RSLT_COMMAND "COMMAND"
 
 #define D_LOG_SOME_SETTINGS_RESET "Some settings have been reset"
 
@@ -298,6 +302,7 @@
 #define D_CMND_GPIO "GPIO"
   #define D_JSON_NOT_SUPPORTED "Not supported"
 #define D_CMND_GPIOS "GPIOs"
+#define D_CMND_GPIOREAD "GPIORead"
 #define D_CMND_PWM "PWM"
 #define D_CMND_PWMFREQUENCY "PWMFrequency"
 #define D_CMND_PWMRANGE "PWMRange"
@@ -455,6 +460,8 @@
 #define D_CMND_VOLTAGEHIGH "VoltageHigh"
 #define D_CMND_CURRENTLOW "CurrentLow"
 #define D_CMND_CURRENTHIGH "CurrentHigh"
+#define D_CMND_ENERGYDISPLAY "EnergyDisplay"
+#define D_CMND_ENERGYCOLS "EnergyCols"
 #define D_CMND_ENERGYTODAY "EnergyToday"
 #define D_CMND_ENERGYYESTERDAY "EnergyYesterday"
 #define D_CMND_ENERGYTOTAL "EnergyTotal"
@@ -502,6 +509,9 @@
 #define D_CMND_PALETTE "Palette"
 #define D_CMND_PIXELS "Pixels"
 #define D_CMND_STEPPIXELS "StepPixels"
+#define D_CMND_ARTNET "ArtNet"
+#define D_CMND_ARTNET_CONFIG "ArtNetConfig"
+#define D_SO_ARTNET_AUTORUN "ArtNetAutorun"
 #define D_CMND_RGBWWTABLE "RGBWWTable"
 #define D_CMND_ROTATION "Rotation"
 #define D_CMND_SCHEME "Scheme"
@@ -530,6 +540,7 @@
   #define D_JSON_IRHVAC_VENDOR "Vendor"
   #define D_JSON_IRHVAC_PROTOCOL "Protocol"
   #define D_JSON_IRHVAC_MODEL "Model"
+  #define D_JSON_IRHVAC_COMMAND "Command"
   #define D_JSON_IRHVAC_POWER "Power"
   #define D_JSON_IRHVAC_MODE "Mode"
   #define D_JSON_IRHVAC_FANSPEED "FanSpeed"
@@ -546,10 +557,15 @@
   #define D_JSON_IRHVAC_CLEAN "Clean"
   #define D_JSON_IRHVAC_SLEEP "Sleep"
   #define D_JSON_IRHVAC_CLOCK "Clock"
+  #define D_JSON_IRHVAC_IFEEL "iFeel"
+  #define D_JSON_IRHVAC_CONFIG_KEY "ConfigKey"
+  #define D_JSON_IRHVAC_CONFIG_VALUE "ConfigValue"
+  #define D_JSON_IRHVAC_SENSOR_TEMP "SensorTemp"
   #define D_JSON_IRHVAC_STATE_MODE "StateMode"
     #define D_JSON_IRHVAC_STATE_MODE_SEND_ONLY "SendOnly"
     #define D_JSON_IRHVAC_STATE_MODE_STORE_ONLY "StoreOnly"
     #define D_JSON_IRHVAC_STATE_MODE_SEND_STORE "SendStore"
+  #define D_JSON_IRHVAC_INCREMENTAL "Incremental"
 #define D_JSON_IRRECEIVED "IrReceived"
 
 // Commands xdrv_06_snfbridge.ino
@@ -572,6 +588,7 @@
 // Commands xdrv_08_serial_bridge.ino
 #define D_CMND_SSERIALSEND "SSerialSend"
 #define D_CMND_SBAUDRATE "SBaudrate"
+#define D_CMND_SSERIALBUFFER "SSerialBuffer"
 #define D_CMND_SSERIALCONFIG "SSerialConfig"
   #define D_JSON_SSERIALRECEIVED "SSerialReceived"
 
@@ -685,6 +702,7 @@
 #define D_CMND_ZIGBEE_LOAD "Load"
 #define D_CMND_ZIGBEE_LOADDUMP "LoadDump"
 #define D_CMND_ZIGBEE_UNLOAD "Unload"
+#define D_CMND_ZIGBEE_ATTRDUMP "AttrDump"
 
 // Commands xdrv_25_A4988_Stepper.ino
 #define D_CMND_MOTOR "MOTOR"
@@ -731,6 +749,8 @@
 #define D_CMND_SHUTTER_TILTCONFIG "TiltConfig"
 #define D_CMND_SHUTTER_SETTILT "Tilt"
 #define D_CMND_SHUTTER_TILTINCDEC "TiltChange"
+#define D_CMND_SHUTTER_MOTORSTOP "MotorStop"
+#define D_CMND_SHUTTER_SETUP "Setup"
 
 // Commands xdrv_32_hotplug.ino
 #define D_CMND_HOTPLUG "HotPlug"
@@ -745,19 +765,38 @@
 #define D_CMND_PING "Ping"
 #define D_JSON_PING "Ping"
 
+// Commands xdrv_42_audio - I2S Audio
+#define D_PRFX_I2S "I2S"
+#define D_JSON_I2S_CONFIG "Config"
+
+
 // Commands xdrv_52_berry.ino - Berry scripting language
 #define D_PRFX_BR "Br"
 #define D_CMND_BR_RUN ""
+#define D_CMND_BR_RESTART "Restart"
 #define D_BR_NOT_STARTED  "Berry not started"
 
 // Commands xdrv_60_shift595.ino - 74x595 family shift register driver
 #define D_CMND_SHIFT595_DEVICE_COUNT "Shift595DeviceCount"
 
+// Commands xdrv_70_hdmi_cec.ino
+#define D_PRFX_HDMI "Hdmi"
+#define D_CMND_HDMI_SEND "Send"
+#define D_CMND_HDMI_SEND_RAW "SendRaw"
+#define D_CMND_HDMI_TYPE "Type"
+#define D_CMND_HDMI_ADDR "Addr"
+
+// Commands xdrv_89_dali.ino
+#define D_CMND_DALI_POWER                 "power"
+#define D_CMND_DALI_DIMMER                "dim"
+
 // Commands xsns_02_analog.ino
 #define D_CMND_ADCPARAM "AdcParam"
 
 // Commands xsns_05_ds18x20.ino
-#define D_CMND_DS_ALIAS "DS18Alias"
+#define D_CMND_DS_ALIAS "Alias"
+#define D_CMND_DS_RESCAN "Rescan"
+#define D_CMND_DS_RETRYREAD "RetryRead"
 
 // xsns_70_veml6075.ino
 #define D_JSON_UVA_INTENSITY "UvaIntensity"
@@ -797,10 +836,13 @@
 #define D_LOG_UPLOAD "UPL: "       // Upload
 #define D_LOG_UPNP "UPP: "         // UPnP
 #define D_LOG_WIFI "WIF: "         // Wifi
+#define D_LOG_ETH "ETH: "          // Ethernet
 #define D_LOG_ZIGBEE "ZIG: "       // Zigbee
 #define D_LOG_TCP "TCP: "          // TCP bridge
 #define D_LOG_BERRY "BRY: "        // Berry scripting language
 #define D_LOG_LVGL "LVG: "         // LVGL graphics engine
+#define D_LOG_THERMOSTAT "THE: "   // Thermostat driver
+#define D_LOG_SENSOR "SNS: "       // Sensor driver
 
 /********************************************************************************************/
 
@@ -855,7 +897,6 @@ const char JSON_SNS_RANGE[] PROGMEM = ",\"%s\":{\"" D_JSON_RANGE "\":%d}";
 const char JSON_SNS_GNGPM[] PROGMEM = ",\"%s\":{\"" D_JSON_TOTAL_USAGE "\":%s,\"" D_JSON_FLOWRATE "\":%s}";
 
 const char S_LOG_I2C_FOUND_AT[] PROGMEM = D_LOG_I2C "%s " D_FOUND_AT " 0x%x";
-const char S_LOG_I2C_FOUND_AT_PORT[] PROGMEM = D_LOG_I2C "%s " D_FOUND_AT " 0x%x (" D_PORT " %d)";
 
 const char S_RSLT_POWER[] PROGMEM = D_RSLT_POWER;
 const char S_RSLT_RESULT[] PROGMEM = D_RSLT_RESULT;
@@ -882,6 +923,11 @@ const float kSpeedConversionFactor[] = {1,            // none
 const char HTTP_SNS_F_TEMP[]        PROGMEM = "{s}%s "  D_TEMPERATURE         "{m}%*_f " D_UNIT_DEGREE          "%c{e}";
 const char HTTP_SNS_F_VOLTAGE[]     PROGMEM = "{s}%s "  D_VOLTAGE             "{m}%*_f " D_UNIT_VOLT              "{e}";
 const char HTTP_SNS_F_CURRENT_MA[]  PROGMEM = "{s}%s "  D_CURRENT             "{m}%*_f " D_UNIT_MILLIAMPERE       "{e}";
+const char HTTP_SNS_F_DISTANCE_CM[] PROGMEM = "{s}%s "  D_DISTANCE            "{m}%1_f " D_UNIT_CENTIMETER        "{e}";
+const char HTTP_SNS_F_NOX[]         PROGMEM = "{s}%s "  D_NOX                 "{m}%*_f "                          "{e}";
+const char HTTP_SNS_F_VOC[]         PROGMEM = "{s}%s "  D_VOC                 "{m}%*_f "                          "{e}";
+const char HTTP_SNS_F_ABS_HUM[]     PROGMEM = "{s}%s "  D_ABSOLUTE_HUMIDITY   "{m}%*_f " D_UNIT_GRAM_PER_CUBIC_METER "{e}";
+
 const char HTTP_SNS_HUM[]           PROGMEM = "{s}%s "  D_HUMIDITY            "{m}%s " D_UNIT_PERCENT             "{e}";
 const char HTTP_SNS_DEW[]           PROGMEM = "{s}%s "  D_DEWPOINT            "{m}%s " D_UNIT_DEGREE            "%c{e}";
 const char HTTP_SNS_PRESSURE[]      PROGMEM = "{s}%s "  D_PRESSURE            "{m}%s "                          "%s{e}";
@@ -895,13 +941,7 @@ const char HTTP_SNS_GPM[]           PROGMEM = "{s}%s "  D_FLOW_RATE           "{
 const char HTTP_SNS_MOISTURE[]      PROGMEM = "{s}%s "  D_MOISTURE            "{m}%d " D_UNIT_PERCENT             "{e}";
 const char HTTP_SNS_RANGE_CHR[]     PROGMEM = "{s}%s "  D_RANGE               "{m}%s"                             "{e}";
 const char HTTP_SNS_RANGE[]         PROGMEM = "{s}%s "  D_RANGE               "{m}%d"                             "{e}";
-const char HTTP_SNS_DISTANCE[]      PROGMEM = "{s}%s "  D_DISTANCE            "{m}%d " D_UNIT_MILLIMETER          "{e}";
-const char HTTP_SNS_DISTANCE_CM[]   PROGMEM = "{s}%s "  D_DISTANCE            "{m}%s " D_UNIT_CENTIMETER          "{e}";
 const char HTTP_SNS_HALL_EFFECT[]   PROGMEM = "{s}%s "  D_HALL_EFFECT         "{m}%d"                             "{e}";
-const char HTTP_SNS_VOLTAGE[]       PROGMEM = "{s}"     D_VOLTAGE             "{m}%s " D_UNIT_VOLT                "{e}";
-const char HTTP_SNS_CURRENT[]       PROGMEM = "{s}"     D_CURRENT             "{m}%s " D_UNIT_AMPERE              "{e}";
-const char HTTP_SNS_POWER[]         PROGMEM = "{s}"     D_POWERUSAGE_ACTIVE   "{m}%s " D_UNIT_WATT                "{e}";
-const char HTTP_SNS_ENERGY_TOTAL[]  PROGMEM = "{s}"     D_ENERGY_TOTAL        "{m}%s " D_UNIT_KILOWATTHOUR        "{e}";
 const char HTTP_SNS_PH[]            PROGMEM = "{s}%s "  D_PH                  "{m}%s "                            "{e}";
 const char HTTP_SNS_MQ[]            PROGMEM = "{s}"     D_MQ"-%s"             "{m}%s " D_UNIT_PARTS_PER_MILLION   "{e}";
 const char HTTP_SNS_ORP[]           PROGMEM = "{s}%s "  D_ORP                 "{m}%s " D_UNIT_MILLIVOLT           "{e}";
@@ -917,6 +957,34 @@ const char HTTP_SNS_MILLILITERS[]   PROGMEM = "{s}%s "  D_VOLUME              "{
 const char HTTP_SNS_GAS[]           PROGMEM = "{s}%s "  D_GAS                 "{m}%d " D_UNIT_PERCENT          "LEL{e}";
 const char HTTP_SNS_SOC[]           PROGMEM = "{s}%s "  D_SOC                 "{m}%d " D_UNIT_PERCENT             "{e}";
 const char HTTP_SNS_SOH[]           PROGMEM = "{s}%s "  D_SOH                 "{m}%d " D_UNIT_PERCENT             "{e}";
+
+const char HTTP_SNS_STANDARD_CONCENTRATION[] PROGMEM =        "{s}%s " D_STANDARD_CONCENTRATION      " %s " D_UNIT_MICROMETER "{m}%d " D_UNIT_MICROGRAM_PER_CUBIC_METER "{e}";
+const char HTTP_SNS_ENVIRONMENTAL_CONCENTRATION[] PROGMEM =   "{s}%s " D_ENVIRONMENTAL_CONCENTRATION " %s " D_UNIT_MICROMETER "{m}%d " D_UNIT_MICROGRAM_PER_CUBIC_METER "{e}";
+const char HTTP_SNS_F_ENVIRONMENTAL_CONCENTRATION[] PROGMEM = "{s}%s " D_ENVIRONMENTAL_CONCENTRATION " %s " D_UNIT_MICROMETER "{m}%1_f " D_UNIT_MICROGRAM_PER_CUBIC_METER "{e}";
+const char HTTP_SNS_PARTICALS_BEYOND[] PROGMEM =              "{s}%s " D_PARTICALS_BEYOND            " %s " D_UNIT_MICROMETER "{m}%d " D_UNIT_PARTS_PER_DECILITER       "{e}";
+const char HTTP_SNS_AVG_RAD_DOSE[]     PROGMEM =              "{s}%s " D_AVG_RAD_DOSE                " %s " D_UNIT_MINUTE     "{m}%d.%02d " D_UNIT_US_H                  "{e}";
+
+const char HTTP_SNS_VOLTAGE[]             PROGMEM = "{s}" D_VOLTAGE                 "{m}%s " D_UNIT_VOLT          "{e}";
+const char HTTP_SNS_CURRENT[]             PROGMEM = "{s}" D_CURRENT                 "{m}%s " D_UNIT_AMPERE        "{e}";
+const char HTTP_SNS_CURRENT_N[]           PROGMEM = "{s}" D_CURRENT_NEUTRAL         "{m}%s " D_UNIT_AMPERE        "{e}";
+const char HTTP_SNS_POWER[]               PROGMEM = "{s}" D_POWERUSAGE_ACTIVE       "{m}%s " D_UNIT_WATT          "{e}";
+const char HTTP_SNS_IMPORT_POWER[]        PROGMEM = "{s}" D_IMPORT_POWER            "{m}%s " D_UNIT_WATT          "{e}";
+const char HTTP_SNS_EXPORT_POWER[]        PROGMEM = "{s}" D_EXPORT_POWER            "{m}%s " D_UNIT_WATT          "{e}";
+const char HTTP_SNS_MAX_POWER[]           PROGMEM = "{s}" D_MAX_POWER               "{m}%s " D_UNIT_WATT          "{e}";
+const char HTTP_SNS_POWER_TOTAL[]         PROGMEM = "{s}" D_POWERUSAGE_ACTIVE_TOTAL "{m}%s " D_UNIT_WATT          "{e}";
+const char HTTP_SNS_POWERUSAGE_APPARENT[] PROGMEM = "{s}" D_POWERUSAGE_APPARENT     "{m}%s " D_UNIT_VA            "{e}";
+const char HTTP_SNS_POWERUSAGE_REACTIVE[] PROGMEM = "{s}" D_POWERUSAGE_REACTIVE     "{m}%s " D_UNIT_VAR           "{e}";
+const char HTTP_SNS_POWER_FACTOR[]        PROGMEM = "{s}" D_POWER_FACTOR            "{m}%s                         {e}";
+const char HTTP_SNS_ENERGY_TODAY[]        PROGMEM = "{s}" D_ENERGY_TODAY            "{m}%s " D_UNIT_KILOWATTHOUR  "{e}";
+const char HTTP_SNS_ENERGY_YESTERDAY[]    PROGMEM = "{s}" D_ENERGY_YESTERDAY        "{m}%s " D_UNIT_KILOWATTHOUR  "{e}";
+const char HTTP_SNS_ENERGY_TOTAL[]        PROGMEM = "{s}" D_ENERGY_TOTAL            "{m}%s " D_UNIT_KILOWATTHOUR  "{e}";
+const char HTTP_SNS_EXPORT_ACTIVE[]       PROGMEM = "{s}" D_EXPORT_ACTIVE           "{m}%s " D_UNIT_KILOWATTHOUR  "{e}";
+const char HTTP_SNS_TOTAL_ACTIVE[]        PROGMEM = "{s}" D_TOTAL_ACTIVE            "{m}%s " D_UNIT_KILOWATTHOUR  "{e}";
+const char HTTP_SNS_RSTTBL_TOTAL_ACTIVE[] PROGMEM = "{s}" D_RESETTABLE_TOTAL_ACTIVE "{m}%s " D_UNIT_KILOWATTHOUR  "{e}";
+const char HTTP_SNS_IMPORT_REACTIVE[]     PROGMEM = "{s}" D_IMPORT_REACTIVE         "{m}%s " D_UNIT_KWARH         "{e}";
+const char HTTP_SNS_EXPORT_REACTIVE[]     PROGMEM = "{s}" D_EXPORT_REACTIVE         "{m}%s " D_UNIT_KWARH         "{e}";
+const char HTTP_SNS_TOTAL_REACTIVE[]      PROGMEM = "{s}" D_TOTAL_REACTIVE          "{m}%s " D_UNIT_KWARH         "{e}";
+const char HTTP_SNS_PHASE_ANGLE[]         PROGMEM = "{s}" D_PHASE_ANGLE             "{m}%s " D_UNIT_ANGLE         "{e}";
 #endif  // USE_WEBSERVER
 
 #endif  // _I18N_H_

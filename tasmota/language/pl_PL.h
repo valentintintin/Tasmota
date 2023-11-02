@@ -28,7 +28,7 @@
  * Use online command StateText to translate ON, OFF, HOLD and TOGGLE.
  * Use online command Prefix to translate cmnd, stat and tele.
  *
- * Updated until v11.1.0.3 - Last update 17.05.2022
+ * Updated until v12.5.0.2 - Last update 08.05.2023
 \*********************************************************************/
 
 //#define LANGUAGE_MODULE_NAME         // Enable to display "Module Generic" (ie Spanish), Disable to display "Generic Module" (ie English)
@@ -51,12 +51,14 @@
 #define D_DECIMAL_SEPARATOR ","
 
 // Common
+#define D_ABSOLUTE_HUMIDITY "Abs Humidity"
 #define D_ADMIN "Admin"
 #define D_AIR_QUALITY "Jakość powietrza"
 #define D_AP "AP"                    // Access Point
 #define D_AS "jak"
 #define D_AUTO "AUTO"
 #define D_BATT "Batt"                // Short for Battery
+#define D_BATTERY_CHARGE "Charge"   // Battery charge in %
 #define D_BLINK "Miganie"
 #define D_BLINKOFF "Miganie - Wył."
 #define D_BOOT_COUNT "Licznik restartów"
@@ -83,6 +85,9 @@
 #define D_DEBUG "Debug"
 #define D_DEWPOINT "Punkt rosy"
 #define D_DISABLED "Wyłączony"
+#define D_MOVING_DISTANCE "Moving Distance"
+#define D_STATIC_DISTANCE "Static Distance"
+#define D_DETECT_DISTANCE "Detect Distance"
 #define D_DISTANCE "Odległość"
 #define D_DNS_SERVER "Serwer DNS"
 #define D_DO "Rozpuszczalność tlenu"
@@ -100,6 +105,7 @@
 #define D_FALLBACK_TOPIC "Temat zastępczy"
 #define D_FALSE "Fałsz"
 #define D_FILE "Plik"
+#define D_FILE_SYSTEM_SIZE "Rozmiar systemu plików"
 #define D_FLOW_RATE "Przepływ"
 #define D_FRAGMENTATION "frag."      // Lower case abbreviated version of fragmentation used in "memory fragmentation"
 #define D_FRAME_RATE "Frame rate"
@@ -107,7 +113,7 @@
 #define D_PSR_MAX_MEMORY "Pamięć PS-RAM"
 #define D_PSR_FREE_MEMORY "Wolna pamięć PS-RAM"
 #define D_FREQUENCY "Częstotliwość"
-#define D_GAS "Gas"
+#define D_GAS "Gaz"
 #define D_GATEWAY "Brama"
 #define D_GROUP "Grupa"
 #define D_HOST "Serwer"
@@ -130,6 +136,7 @@
 #define D_MULTI_PRESS "Wielokrotne naciśnięcie"
 #define D_NOISE "Szum"
 #define D_NONE "Brak"
+#define D_NOX "NOx"
 #define D_O2 "Tlen"
 #define D_OFF "Wyłączony"
 #define D_OFFLINE "Nieaktywny"
@@ -145,6 +152,7 @@
 #define D_POWER_FACTOR "Cosinus fi"
 #define D_POWERUSAGE "Moc"
 #define D_POWERUSAGE_ACTIVE "Moc czynna"
+#define D_POWERUSAGE_ACTIVE_TOTAL "Active Power Total"
 #define D_POWERUSAGE_APPARENT "Moc pozorna"
 #define D_POWERUSAGE_REACTIVE "Moc bierna"
 #define D_PRESSURE "Ciśnienie"
@@ -181,6 +189,9 @@
 #define D_TRANSMIT "Wyślij"
 #define D_TRUE "Prawda"
 #define D_TVOC "TVOC"
+#define D_TWILIGHT_ASTRONOMICAL "Astronomical"
+#define D_TWILIGHT_CIVIL "Civil"
+#define D_TWILIGHT_NAUTICAL "Nautical"
 #define D_UPGRADE "aktualizacji"
 #define D_UPLOAD "Wgraj"
 #define D_UPTIME "Czas pracy"
@@ -198,6 +209,7 @@
 #define D_UV_LEVEL "Poziom UV"
 #define D_UV_POWER "Moc UV"
 #define D_VERSION "Wersja"
+#define D_VOC "VOC"
 #define D_VOLTAGE "Napięcie"
 #define D_VOLUME "Pojemność"
 #define D_WEIGHT "Waga"
@@ -295,6 +307,7 @@
 #define D_REFRESH_TO_SCAN_AGAIN "Odśwież aby ponownie wyszukać sieci"
 #define D_DUPLICATE_ACCESSPOINT "Duplikuj"
 #define D_SKIPPING_LOW_QUALITY "Pominięto z powodu niskiej jakości sygnału"
+#define D_MODE "Mode"
 #define D_RSSI "RSSI"
 #define D_WEP "WEP"
 #define D_WPA_PSK "WPA PSK"
@@ -511,6 +524,11 @@
 #define D_ZIGBEE_EEPROM_FOUND_AT_ADDRESS "Znaleziono ZBBridge EEPROM na adresie"
 #define D_ZIGBEE_RANDOMIZING_ZBCONFIG "Losowanie parametrów Zigbee, proszę sprawdzić 'ZbConfig'"
 
+// xdrv_89_dali.ino
+#define D_SENSOR_DALI_RX                  "Dali RX"
+#define D_SENSOR_DALI_TX                  "Dali TX"
+#define D_CONFIGURE_DALI                  "Config DALI"
+
 // xdrv_03_energy.ino
 #define D_ENERGY_TODAY "Energia dzisiaj"
 #define D_ENERGY_YESTERDAY "Energia wczoraj"
@@ -612,8 +630,8 @@
 #define D_Spannung_L3 "Napięcie L3"
 #define D_METERNR "Numer licznika"
 #define D_METERSID "Identyfikator licznika"
-#define D_GasIN "Licznik"
-#define D_H2oIN "Licznik"
+#define D_GasIN "Licznik Gazu"
+#define D_H2oIN "Licznik Wody"
 #define D_StL1L2L3 "Prąd suma"
 #define D_SpL1L2L3 "Prąd średni"
 
@@ -639,6 +657,8 @@
 #define D_SENSOR_I2S_BCLK_IN   "I2S WS IN"
 #define D_SENSOR_I2S_DIN       "I2S DIN"
 #define D_SENSOR_I2S_DOUT      "I2S DOUT"
+#define D_SENSOR_I2S_DAC       "I2S DAC"
+#define D_SENSOR_HDMI_CEC      "HDMI CEC"
 #define D_SENSOR_WS2812        "WS2812"
 #define D_SENSOR_DFR562        "Odtwarzacz MP3"
 #define D_SENSOR_DFR562_BUSY   "MP3 zajęty"
@@ -655,6 +675,7 @@
 #define D_SENSOR_IRRECV        "IRrecv"
 #define D_SENSOR_MHZ_RX        "MHZ Rx"
 #define D_SENSOR_MHZ_TX        "MHZ Tx"
+#define D_SENSOR_HC8_RX        "HC8 Rx"
 #define D_SENSOR_PZEM004_RX    "PZEM004 Rx"
 #define D_SENSOR_PZEM016_RX    "PZEM016 Rx"
 #define D_SENSOR_PZEM017_RX    "PZEM017 Rx"
@@ -683,10 +704,12 @@
 #define D_SENSOR_SBR_TX        "SerBr Tx"
 #define D_SENSOR_MBR_TX        "ModBr Tx"
 #define D_SENSOR_MBR_RX        "ModBr Rx"
+#define D_SENSOR_MBR_TX_ENA    "ModBr Tx Ena"
 #define D_SENSOR_SR04_TRIG     "SR04 Tri/TX"
 #define D_SENSOR_SR04_ECHO     "SR04 Ech/RX"
-#define D_SENSOR_NRG_MBS_TX    "NrgModbus Tx"
-#define D_SENSOR_NRG_MBS_RX    "NrgModbus Rx"
+#define D_SENSOR_NRG_MBS_TX    "NrgMbs Tx"
+#define D_SENSOR_NRG_MBS_RX    "NrgMbs Rx"
+#define D_SENSOR_NRG_MBS_TX_ENA  "NrgMbs Tx Ena"
 #define D_SENSOR_SDM72_TX      "SDM72 Tx"
 #define D_SENSOR_SDM72_RX      "SDM72 Rx"
 #define D_SENSOR_SDM120_TX     "SDMx20 Tx"
@@ -697,6 +720,8 @@
 #define D_SENSOR_SDM630_RX     "SDM630 Rx"
 #define D_SENSOR_WE517_TX      "WE517 Tx"
 #define D_SENSOR_WE517_RX      "WE517 Rx"
+#define D_SENSOR_LD2410_TX     "LD2410 Tx"
+#define D_SENSOR_LD2410_RX     "LD2410 Rx"
 #define D_GPIO_TM1621_CS       "TM1621 CS"
 #define D_GPIO_TM1621_WR       "TM1621 WR"
 #define D_GPIO_TM1621_RD       "TM1621 RD"
@@ -768,6 +793,7 @@
 #define D_SENSOR_ADE7880_IRQ   "ADE7880 IRQ"
 #define D_SENSOR_ADE7953_IRQ   "ADE7953 IRQ"
 #define D_SENSOR_ADE7953_RST   "ADE7953 RST"
+#define D_SENSOR_ADE7953_CS    "ADE7953 CS"
 #define D_SENSOR_BUZZER        "Dzwonek"
 #define D_SENSOR_DISP_RESET    "Reset Display"
 #define D_SENSOR_ZIGBEE_TXD    "Zigbee Tx"
@@ -788,6 +814,8 @@
 #define D_SENSOR_OUTPUT_LO     "Wyjście Lo"
 #define D_SENSOR_AS608_TX      "AS608 Tx"
 #define D_SENSOR_AS608_RX      "AS608 Rx"
+#define D_SENSOR_GM861_TX      "GM861 Tx"
+#define D_SENSOR_GM861_RX      "GM861 Rx"
 #define D_SENSOR_DDS2382_TX    "DDS238-2 Tx"
 #define D_SENSOR_DDS2382_RX    "DDS238-2 Rx"
 #define D_SENSOR_DDSU666_TX    "DDSU666 Tx"
@@ -796,6 +824,8 @@
 #define D_SENSOR_SM2135_DAT    "SM2135 Dat"
 #define D_SENSOR_SM2335_CLK    "SM2335 Clk"
 #define D_SENSOR_SM2335_DAT    "SM2335 Dat"
+#define D_SENSOR_BP1658CJ_CLK  "BP1658CJ Clk"
+#define D_SENSOR_BP1658CJ_DAT  "BP1658CJ Dat"
 #define D_SENSOR_BP5758D_CLK    "BP5758D Clk"
 #define D_SENSOR_BP5758D_DAT    "BP5758D Dat"
 #define D_SENSOR_DEEPSLEEP     "Głęboko uśpiony"
@@ -882,6 +912,9 @@
 #define D_SENSOR_ZEROCROSS     "ZC Pulse"
 #define D_SENSOR_HALLEFFECT    "Efekt Halla"
 #define D_SENSOR_EPD_DATA      "EPD Dane"
+#define D_SENSOR_PCF8574_INT   "PCF8574 Int"
+#define D_SENSOR_MCP23XXX_INT  "MCP23xxx Int"
+#define D_SENSOR_MCP23SXX_CS   "MCP23Sxx CS"
 #define D_SENSOR_MCP2515_CS    "MCP2515 CS"
 #define D_SENSOR_HRG15_RX      "HRG15 Rx"
 #define D_SENSOR_HRG15_TX      "HRG15 Tx"
@@ -894,9 +927,23 @@
 #define D_GPIO_SHIFT595_RCLK   "74x595 RCLK"
 #define D_GPIO_SHIFT595_OE     "74x595 OE"
 #define D_GPIO_SHIFT595_SER    "74x595 SER"
+#define D_GPIO_DINGTIAN_CLK    "Dingtian CLK"
+#define D_GPIO_DINGTIAN_SDI    "Dingtian SDI"
+#define D_GPIO_DINGTIAN_Q7     "Dingtian Q7"
+#define D_GPIO_DINGTIAN_PL     "Dingtian PL"
+#define D_GPIO_DINGTIAN_OE     "Dingtian OE"
+#define D_GPIO_DINGTIAN_RCK    "Dingtian RCK"
 #define D_SENSOR_CM11_TX       "CM110x TX"
 #define D_SENSOR_CM11_RX       "CM110x RX"
 #define D_SENSOR_FLOWRATEMETER "Flowrate"
+#define D_SENSOR_ME007_TRIG    "ME007 Tri"
+#define D_SENSOR_ME007_RX      "ME007 Rx"
+#define D_SENSOR_TUYAMCUBR_TX  "TuyaMCUBr Tx"
+#define D_SENSOR_TUYAMCUBR_RX  "TuyaMCUBr Rx"
+#define D_SENSOR_BIOPDU_PZEM0XX_TX "BioPDU PZEM0XX Tx"
+#define D_SENSOR_BIOPDU_PZEM016_RX "BioPDU PZEM016 Rx"
+#define D_SENSOR_BIOPDU_BIT    "BioPDU Bit"
+#define D_SENSOR_LOX_O2_RX     "LoxO2 RX"
 
 // Units
 #define D_UNIT_AMPERE "A"
@@ -909,6 +956,7 @@
 #define D_UNIT_HOUR "Godz"
 #define D_UNIT_GALLONS "gal"
 #define D_UNIT_GALLONS_PER_MIN "g/m"
+#define D_UNIT_GRAM_PER_CUBIC_METER "g/m³"
 #define D_UNIT_INCH_MERCURY "inHg"
 #define D_UNIT_INCREMENTS "inc"
 #define D_UNIT_KELVIN "K"
@@ -1155,5 +1203,9 @@
 #define D_NEOPOOL_PH_HIGH                 "too high"          // ph Alarms
 #define D_NEOPOOL_PH_LOW                  "too low"
 #define D_NEOPOOL_PUMP_TIME_EXCEEDED      "czas pompowania przekroczony"
+
+// xsns_106_gdk101.ino
+#define D_AVG_RAD_DOSE                    "Średnia Dawka Promieniowania"
+#define D_UNIT_US_H                       "µSv/h"
 
 #endif  // _LANGUAGE_PL_PL_D_H_

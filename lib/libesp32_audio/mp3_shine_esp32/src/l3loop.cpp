@@ -31,7 +31,7 @@ static void calc_xmin( gr_info *cod_info, shine_psy_xmin_t *l3_xmin, int gr, int
 static int quantize(int ix[GRANULE_SIZE], int stepsize, shine_global_config *config);
 
 
-int32_t sqrt_int(int32_t r) {
+int sqrt_int(int r) {
     float x;
     float rr = r;
     float y = rr*0.5;
@@ -40,7 +40,7 @@ int32_t sqrt_int(int32_t r) {
     x = (1.5f*x) - (x*x)*(x*y);
     if(r>101123) x = (1.5f*x) - (x*x)*(x*y);
 
-    int32_t is = (int32_t)(x*rr + 0.5f);
+    int is = (int)(x*rr + 0.5f);
     return is + ((r - is*is)>>31);
 }
 
@@ -138,7 +138,7 @@ void shine_iteration_loop(shine_global_config *config) {
        */
       for (i=GRANULE_SIZE, config->l3loop->xrmax=0; i--;)
       {
-        config->l3loop->xrsq[i]  = mulsr(config->l3loop->xr[i],config->l3loop->xr[i]);
+        config->l3loop->xrsq[i]  = asm_mulsr(config->l3loop->xr[i],config->l3loop->xr[i]);
         config->l3loop->xrabs[i] = abs(config->l3loop->xr[i]);
         if(config->l3loop->xrabs[i]>config->l3loop->xrmax)
           config->l3loop->xrmax=config->l3loop->xrabs[i];
@@ -382,7 +382,7 @@ void shine_loop_initialise(shine_global_config *config) {
        * In quantize, the long multiply does not shift it's result left one
        * bit to compensate.
        */
-      config->l3loop->steptabi[i] = (int32_t)((config->l3loop->steptab[i]*2) + 0.5);
+      config->l3loop->steptabi[i] = (int)((config->l3loop->steptab[i]*2) + 0.5);
   }
 
   /* quantize: vector conversion, three quarter power table.
@@ -401,14 +401,14 @@ void shine_loop_initialise(shine_global_config *config) {
 int quantize(int ix[GRANULE_SIZE], int stepsize, shine_global_config *config )
 {
   int i, max, ln;
-  int32_t scalei;
+  int scalei;
   float scale, dbl;
 
   scalei = config->l3loop->steptabi[stepsize+127]; /* 2**(-stepsize/4) */
 
   /* a quick check to see if ixmax will be less than 8192 */
   /* this speeds up the early calls to bin_search_StepSize */
-  if((mulr(config->l3loop->xrmax,scalei)) > 165140) /* 8192**(4/3) */
+  if((asm_mulr(config->l3loop->xrmax,scalei)) > 165140) /* 8192**(4/3) */
     max = 16384; /* no point in continuing, stepsize not big enough */
   else
     for(i=0, max=0;i<GRANULE_SIZE;i++)
@@ -416,7 +416,7 @@ int quantize(int ix[GRANULE_SIZE], int stepsize, shine_global_config *config )
       /* This calculation is very sensitive. The multiply must round it's
        * result or bad things happen to the quality.
        */
-      ln = mulr(abs(config->l3loop->xr[i]),scalei);
+      ln = asm_mulr(abs(config->l3loop->xr[i]),scalei);
 
       if(ln<10000) /* ln < 10000 catches most values */
         ix[i] = config->l3loop->int2idx[ln]; /* quick look up method */
@@ -444,8 +444,8 @@ int quantize(int ix[GRANULE_SIZE], int stepsize, shine_global_config *config )
  * Function: Calculate the maximum of ix from 0 to 575
  */
 static inline int ix_max( int ix[GRANULE_SIZE], unsigned int begin, unsigned int end ) {
-  register int i;
-  register int max = 0;
+  int i;
+  int max = 0;
 
   for(i=begin;i<end;i++)
     if(max < ix[i])
@@ -756,8 +756,8 @@ int count_bit(int ix[GRANULE_SIZE],
               unsigned int end,
               unsigned int table ) {
   unsigned            linbits, ylen;
-  register int        i, sum;
-  register int        x,y;
+  int        i, sum;
+  int        x,y;
   const struct huffcodetab *h;
 
   if(!table)

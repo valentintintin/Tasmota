@@ -85,7 +85,7 @@ void SDM120Every250ms(void)
     if (error) {
       AddLog(LOG_LEVEL_DEBUG, PSTR("SDM: SDM120 error %d"), error);
     } else {
-      Energy.data_valid[0] = 0;
+      Energy->data_valid[0] = 0;
 
       //  0  1  2  3  4  5  6  7  8
       // SA FC BC Fh Fl Sh Sl Cl Ch
@@ -98,31 +98,31 @@ void SDM120Every250ms(void)
 
       switch(Sdm120.read_state) {
         case 0:
-          Energy.voltage[0] = value;          // 230.2 V
+          Energy->voltage[0] = value;          // 230.2 V
           break;
 
         case 1:
-          Energy.current[0]  = value;         // 1.260 A
+          Energy->current[0]  = value;         // 1.260 A
           break;
 
         case 2:
-          Energy.active_power[0] = value;     // -196.3 W
+          Energy->active_power[0] = value;     // -196.3 W
           break;
 
         case 3:
-          Energy.apparent_power[0] = value;   // 223.4 VA
+          Energy->apparent_power[0] = value;   // 223.4 VA
           break;
 
         case 4:
-          Energy.reactive_power[0] = value;   // 92.2
+          Energy->reactive_power[0] = value;   // 92.2
           break;
 
         case 5:
-          Energy.power_factor[0] = value;     // -0.91
+          Energy->power_factor[0] = value;     // -0.91
           break;
 
         case 6:
-          Energy.frequency[0] = value;        // 50.0 Hz
+          Energy->frequency[0] = value;        // 50.0 Hz
           break;
 
         case 7:
@@ -134,7 +134,7 @@ void SDM120Every250ms(void)
           break;
 
         case 9:
-          Energy.export_active[0] = value;    // 6.216 kWh
+          Energy->export_active[0] = value;    // 6.216 kWh
           break;
 
         case 10:
@@ -161,7 +161,7 @@ void SDM120Every250ms(void)
             Sdm120.start_address_count = sdm120_table;  // No extended registers available
           }
         }
-        Energy.import_active[0] = Sdm120.total_active;  // 484.708 kWh
+        Energy->import_active[0] = Sdm120.total_active;  // 484.708 kWh
         EnergyUpdateTotal();  // 484.708 kWh
       }
     }
@@ -177,7 +177,7 @@ void SDM120Every250ms(void)
 
 void Sdm120SnsInit(void)
 {
-  Sdm120Modbus = new TasmotaModbus(Pin(GPIO_SDM120_RX), Pin(GPIO_SDM120_TX));
+  Sdm120Modbus = new TasmotaModbus(Pin(GPIO_SDM120_RX), Pin(GPIO_SDM120_TX), Pin(GPIO_NRG_MBS_TX_ENA));
   uint8_t result = Sdm120Modbus->Begin(SDM120_SPEED);
   if (result) {
     if (2 == result) { ClaimSerial(); }
@@ -203,56 +203,19 @@ void Sdm220Reset(void)
   Sdm120.phase_angle = 0;
 }
 
-#ifdef USE_WEBSERVER
-const char HTTP_ENERGY_SDM220[] PROGMEM =
-  "{s}" D_IMPORT_REACTIVE "{m}%s " D_UNIT_KWARH "{e}"
-  "{s}" D_EXPORT_REACTIVE "{m}%s " D_UNIT_KWARH "{e}"
-  "{s}" D_PHASE_ANGLE "{m}%s " D_UNIT_ANGLE "{e}";
-#endif  // USE_WEBSERVER
-
-/*
 void Sdm220Show(bool json) {
   if (isnan(Sdm120.import_active)) { return; }
 
-  char import_active_chr[FLOATSZ];
-  dtostrfd(Sdm120.import_active, Settings->flag2.energy_resolution, import_active_chr);
-  char import_reactive_chr[FLOATSZ];
-  dtostrfd(Sdm120.import_reactive, Settings->flag2.energy_resolution, import_reactive_chr);
-  char export_reactive_chr[FLOATSZ];
-  dtostrfd(Sdm120.export_reactive, Settings->flag2.energy_resolution, export_reactive_chr);
-  char phase_angle_chr[FLOATSZ];
-  dtostrfd(Sdm120.phase_angle, 2, phase_angle_chr);
-
   if (json) {
-    ResponseAppend_P(PSTR(",\"" D_JSON_IMPORT_ACTIVE "\":%s,\"" D_JSON_IMPORT_REACTIVE "\":%s,\"" D_JSON_EXPORT_REACTIVE "\":%s,\"" D_JSON_PHASE_ANGLE "\":%s"),
-      import_active_chr, import_reactive_chr, export_reactive_chr, phase_angle_chr);
+    ResponseAppend_P(PSTR(",\"" D_JSON_IMPORT_ACTIVE "\":%s"), EnergyFmt(&Sdm120.import_active, Settings->flag2.energy_resolution));
+    ResponseAppend_P(PSTR(",\"" D_JSON_IMPORT_REACTIVE "\":%s"), EnergyFmt(&Sdm120.import_reactive, Settings->flag2.energy_resolution));
+    ResponseAppend_P(PSTR(",\"" D_JSON_EXPORT_REACTIVE "\":%s"), EnergyFmt(&Sdm120.export_reactive, Settings->flag2.energy_resolution));
+    ResponseAppend_P(PSTR(",\"" D_JSON_PHASE_ANGLE "\":%s"), EnergyFmt(&Sdm120.phase_angle, 2));
 #ifdef USE_WEBSERVER
   } else {
-    WSContentSend_PD(HTTP_ENERGY_SDM220, import_reactive_chr, export_reactive_chr, phase_angle_chr);
-#endif  // USE_WEBSERVER
-  }
-}
-*/
-
-void Sdm220Show(bool json) {
-  if (isnan(Sdm120.import_active)) { return; }
-
-  char value_chr[GUISZ];
-  char value2_chr[GUISZ];
-  char value3_chr[GUISZ];
-  char value4_chr[GUISZ];
-
-  if (json) {
-    ResponseAppend_P(PSTR(",\"" D_JSON_IMPORT_ACTIVE "\":%s,\"" D_JSON_IMPORT_REACTIVE "\":%s,\"" D_JSON_EXPORT_REACTIVE "\":%s,\"" D_JSON_PHASE_ANGLE "\":%s"),
-      EnergyFormat(value_chr, &Sdm120.import_active, Settings->flag2.energy_resolution),
-      EnergyFormat(value2_chr, &Sdm120.import_reactive, Settings->flag2.energy_resolution),
-      EnergyFormat(value3_chr, &Sdm120.export_reactive, Settings->flag2.energy_resolution),
-      EnergyFormat(value4_chr, &Sdm120.phase_angle, 2));
-#ifdef USE_WEBSERVER
-  } else {
-    WSContentSend_PD(HTTP_ENERGY_SDM220, WebEnergyFormat(value_chr, &Sdm120.import_reactive, Settings->flag2.energy_resolution, 2),
-                                         WebEnergyFormat(value2_chr, &Sdm120.export_reactive, Settings->flag2.energy_resolution, 2),
-                                         WebEnergyFormat(value3_chr, &Sdm120.phase_angle, 2));
+    WSContentSend_PD(HTTP_SNS_IMPORT_REACTIVE, WebEnergyFmt(&Sdm120.import_reactive, Settings->flag2.energy_resolution, 2));
+    WSContentSend_PD(HTTP_SNS_EXPORT_REACTIVE, WebEnergyFmt(&Sdm120.export_reactive, Settings->flag2.energy_resolution, 2));
+    WSContentSend_PD(HTTP_SNS_PHASE_ANGLE, WebEnergyFmt(&Sdm120.phase_angle, 2));
 #endif  // USE_WEBSERVER
   }
 }
@@ -261,7 +224,7 @@ void Sdm220Show(bool json) {
  * Interface
 \*********************************************************************************************/
 
-bool Xnrg08(uint8_t function)
+bool Xnrg08(uint32_t function)
 {
   bool result = false;
 
@@ -273,11 +236,7 @@ bool Xnrg08(uint8_t function)
       Sdm220Show(1);
       break;
 #ifdef USE_WEBSERVER
-#ifdef USE_ENERGY_COLUMN_GUI
     case FUNC_WEB_COL_SENSOR:
-#else   // not USE_ENERGY_COLUMN_GUI
-    case FUNC_WEB_SENSOR:
-#endif  // USE_ENERGY_COLUMN_GUI
       Sdm220Show(0);
       break;
 #endif  // USE_WEBSERVER

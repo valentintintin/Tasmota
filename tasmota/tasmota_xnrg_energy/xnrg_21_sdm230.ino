@@ -58,7 +58,7 @@ const uint16_t sdm230_start_addresses[] {
   0x0046,   // SDM230_FREQUENCY                           [Hz]
   0X0048,   // SDM230_IMPORT_ACTIVE                       [kWh]
   0X004A,   // SDM230_EXPORT_ACTIVE                       [kWh]
-//  0X0156,   // SDM230_TOTAL_ENERGY_ACTIVE                 [kWh] // = SDM230_IMPORT_ACTIVE = Energy.total
+//  0X0156,   // SDM230_TOTAL_ENERGY_ACTIVE                 [kWh] // = SDM230_IMPORT_ACTIVE = Energy->total
 
 // read more registers offered by SDM230 (may cause timing issues)
 #ifdef SDM230_MORE_REGS
@@ -106,7 +106,7 @@ void SDM230Every250ms(void)
     if (error) {
       AddLog(LOG_LEVEL_DEBUG, PSTR("SDM: SDM230 error %d"), error);
     } else {
-      Energy.data_valid[0] = 0;
+      Energy->data_valid[0] = 0;
 
       //  0  1  2  3  4  5  6  7  8
       // SA FC BC Fh Fl Sh Sl Cl Ch
@@ -119,39 +119,39 @@ void SDM230Every250ms(void)
 
       switch(Sdm230.read_state) {
         case 0:
-          Energy.voltage[0] = value;          // 230.2 V
+          Energy->voltage[0] = value;          // 230.2 V
           break;
 
         case 1:
-          Energy.current[0]  = value;         // 1.260 A
+          Energy->current[0]  = value;         // 1.260 A
           break;
 
         case 2:
-          Energy.active_power[0] = value;     // -196.3 W
+          Energy->active_power[0] = value;     // -196.3 W
           break;
 
         case 3:
-          Energy.apparent_power[0] = value;   // 223.4 VA
+          Energy->apparent_power[0] = value;   // 223.4 VA
           break;
 
         case 4:
-          Energy.reactive_power[0] = value;   // 92.2
+          Energy->reactive_power[0] = value;   // 92.2
           break;
 
         case 5:
-          Energy.power_factor[0] = value;     // -0.91
+          Energy->power_factor[0] = value;     // -0.91
           break;
 
         case 6:
-          Energy.frequency[0] = value;        // 50.0 Hz
+          Energy->frequency[0] = value;        // 50.0 Hz
           break;
 
         case 7:
-          Energy.import_active[0] = value;     // 6.216 kWh => used in EnergyUpdateTotal()
+          Energy->import_active[0] = value;     // 6.216 kWh => used in EnergyUpdateTotal()
           break;
 
         case 8:
-          Energy.export_active[0] = value;    // 478.492 kWh
+          Energy->export_active[0] = value;    // 478.492 kWh
           break;
 
         #ifdef SDM230_MORE_REGS
@@ -188,12 +188,12 @@ void SDM230Every250ms(void)
 
 void Sdm230SnsInit(void)
 {
-  Sdm230Modbus = new TasmotaModbus(Pin(GPIO_SDM230_RX), Pin(GPIO_SDM230_TX));
+  Sdm230Modbus = new TasmotaModbus(Pin(GPIO_SDM230_RX), Pin(GPIO_SDM230_TX), Pin(GPIO_NRG_MBS_TX_ENA));
   uint8_t result = Sdm230Modbus->Begin(SDM230_SPEED);
   if (result) {
     if (2 == result) { ClaimSerial(); }
-      Energy.phase_count = 1;
-      Energy.frequency_common = true;             // Use common frequency
+      Energy->phase_count = 1;
+      Energy->frequency_common = true;             // Use common frequency
   } else {
     TasmotaGlobal.energy_driver = ENERGY_NONE;
   }
@@ -216,48 +216,16 @@ void Sdm230Reset(void)
 }
 
 #ifdef SDM230_MORE_REGS
-#ifdef USE_WEBSERVER
-const char HTTP_ENERGY_SDM230[] PROGMEM =
-  "{s}" D_PHASE_ANGLE "{m}%s " D_UNIT_ANGLE "{e}"
-  "{s}" D_MAX_POWER "{m}%s " D_UNIT_WATT "{e}"
-  "{s}" D_RESETTABLE_TOTAL_ACTIVE "{m}%s " D_UNIT_KILOWATTHOUR "{e}";
-#endif  // USE_WEBSERVER
-
-/*
 void Sdm230Show(bool json) {
-  char phase_angle_chr[FLOATSZ];
-  dtostrfd(Sdm230.phase_angle, 2, phase_angle_chr);
-  char maximum_demand_chr[FLOATSZ];
-  dtostrfd(Sdm230.maximum_total_demand_power_active, Settings->flag2.wattage_resolution, maximum_demand_chr);
-  char resettable_energy_chr[FLOATSZ];
-  dtostrfd(Sdm230.resettable_total_energy, Settings->flag2.energy_resolution, resettable_energy_chr);
-
   if (json) {
-    ResponseAppend_P(PSTR(",\"" D_JSON_PHASE_ANGLE "\":%s,\"" D_JSON_POWERMAX "\":%s,\"" D_JSON_RESETTABLE_TOTAL_ACTIVE "\":%s"),
-      phase_angle_chr, maximum_demand_chr, resettable_energy_chr);
+    ResponseAppend_P(PSTR(",\"" D_JSON_PHASE_ANGLE "\":%s"), EnergyFmt(&Sdm230.phase_angle, 2));
+    ResponseAppend_P(PSTR(",\"" D_JSON_POWERMAX "\":%s"), EnergyFmt(&Sdm230.maximum_total_demand_power_active, Settings->flag2.wattage_resolution));
+    ResponseAppend_P(PSTR(",\"" D_JSON_RESETTABLE_TOTAL_ACTIVE "\":%s"), EnergyFmt(&Sdm230.resettable_total_energy, Settings->flag2.energy_resolution));
 #ifdef USE_WEBSERVER
   } else {
-    WSContentSend_PD(HTTP_ENERGY_SDM230, phase_angle_chr, maximum_demand_chr, resettable_energy_chr);
-#endif  // USE_WEBSERVER
-  }
-}
-*/
-
-void Sdm230Show(bool json) {
-  char value_chr[GUISZ];
-  char value2_chr[GUISZ];
-  char value3_chr[GUISZ];
-
-  if (json) {
-    ResponseAppend_P(PSTR(",\"" D_JSON_PHASE_ANGLE "\":%s,\"" D_JSON_POWERMAX "\":%s,\"" D_JSON_RESETTABLE_TOTAL_ACTIVE "\":%s"),
-      EnergyFormat(value_chr, &Sdm230.phase_angle, 2),
-      EnergyFormat(value2_chr, &Sdm230.maximum_total_demand_power_active, Settings->flag2.wattage_resolution),
-      EnergyFormat(value3_chr, &Sdm230.resettable_total_energy, Settings->flag2.energy_resolution));
-#ifdef USE_WEBSERVER
-  } else {
-    WSContentSend_PD(HTTP_ENERGY_SDM230, WebEnergyFormat(value_chr, &Sdm230.phase_angle, 2),
-                                         WebEnergyFormat(value2_chr, &Sdm230.maximum_total_demand_power_active, Settings->flag2.wattage_resolution),
-                                         WebEnergyFormat(value3_chr, &Sdm230.resettable_total_energy, Settings->flag2.energy_resolution));
+    WSContentSend_PD(HTTP_SNS_PHASE_ANGLE, WebEnergyFmt(&Sdm230.phase_angle, 2));
+    WSContentSend_PD(HTTP_SNS_MAX_POWER, WebEnergyFmt(&Sdm230.maximum_total_demand_power_active, Settings->flag2.wattage_resolution));
+    WSContentSend_PD(HTTP_SNS_RSTTBL_TOTAL_ACTIVE, WebEnergyFmt(&Sdm230.resettable_total_energy, Settings->flag2.energy_resolution));
 #endif  // USE_WEBSERVER
   }
 }
@@ -267,7 +235,7 @@ void Sdm230Show(bool json) {
  * Interface
 \*********************************************************************************************/
 
-bool Xnrg21(uint8_t function)
+bool Xnrg21(uint32_t function)
 {
   bool result = false;
 
@@ -280,11 +248,7 @@ bool Xnrg21(uint8_t function)
       Sdm230Show(1);
       break;
 #ifdef USE_WEBSERVER
-#ifdef USE_ENERGY_COLUMN_GUI
     case FUNC_WEB_COL_SENSOR:
-#else   // not USE_ENERGY_COLUMN_GUI
-    case FUNC_WEB_SENSOR:
-#endif  // USE_ENERGY_COLUMN_GUI
       Sdm230Show(0);
       break;
 #endif  // USE_WEBSERVER

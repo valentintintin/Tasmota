@@ -125,7 +125,7 @@ void FifLEEvery250ms(void)
     if (error) {
       AddLog(LOG_LEVEL_DEBUG, PSTR("FiF-LE: LE01MR Modbus error %d"), error);
     } else {
-      Energy.data_valid[0] = 0;
+      Energy->data_valid[0] = 0;
 
       // CA=Client Address, FC=Function Code, BC=Byte Count, B3..B0=Data byte, Ch Cl = crc16 checksum
       // U32 registers:
@@ -153,36 +153,36 @@ void FifLEEvery250ms(void)
 
       switch(Le01mr.read_state) {
         case 0:
-          Energy.frequency[0] = value_buff * 0.01f;  // 5000 => 50.00
+          Energy->frequency[0] = value_buff * 0.01f;  // 5000 => 50.00
           break;
 
         case 1:
-          Energy.voltage[0] = value_buff * 0.01f;   // 23298 => 232.98 V
+          Energy->voltage[0] = value_buff * 0.01f;   // 23298 => 232.98 V
           break;
 
         case 2:
-          Energy.power_factor[0] = ((int16_t)value_buff) * 0.001f; // 1000 => 1.000 //note: I never saw this negative...
+          Energy->power_factor[0] = ((int16_t)value_buff) * 0.001f; // 1000 => 1.000 //note: I never saw this negative...
           break;
 
         case 3:
-          Energy.current[0] = value_buff * 0.001f; // 114 => 0.114 A
+          Energy->current[0] = value_buff * 0.001f; // 114 => 0.114 A
           break;
 
         case 4:
-          Energy.active_power[0] = value_buff * 1.0f; // P [W]
+          Energy->active_power[0] = value_buff * 1.0f; // P [W]
           break;
 
         case 5:
-          Energy.reactive_power[0] = value_buff * 1.0f; // Q [var]
+          Energy->reactive_power[0] = value_buff * 1.0f; // Q [var]
           break;
 
         case 6:
-          Energy.apparent_power[0] = value_buff * 1.0f; // S [VA]
+          Energy->apparent_power[0] = value_buff * 1.0f; // S [VA]
           break;
 
         case 7:
-          Energy.import_active[0] = value_buff * 0.01f; // [kWh]
-          Le01mr.total_active = Energy.import_active[0];  // Useless
+          Energy->import_active[0] = value_buff * 0.01f; // [kWh]
+          Le01mr.total_active = Energy->import_active[0];  // Useless
           break;
 
         case 8:
@@ -214,7 +214,7 @@ void FifLEEvery250ms(void)
 
 void FifLESnsInit(void)
 {
-  FifLEModbus = new TasmotaModbus(Pin(GPIO_LE01MR_RX), Pin(GPIO_LE01MR_TX));
+  FifLEModbus = new TasmotaModbus(Pin(GPIO_LE01MR_RX), Pin(GPIO_LE01MR_TX), Pin(GPIO_NRG_MBS_TX_ENA));
   uint8_t result = FifLEModbus->Begin(LE01MR_SPEED);
   if (result) {
     if (2 == result) { ClaimSerial(); }
@@ -236,44 +236,14 @@ void FifLEReset(void)
   Le01mr.total_reactive = 0;
 }
 
-#ifdef USE_WEBSERVER
-const char HTTP_ENERGY_LE01MR[] PROGMEM =
-  "{s}" D_TOTAL_ACTIVE "{m}%s " D_UNIT_KILOWATTHOUR "{e}"
-  "{s}" D_TOTAL_REACTIVE "{m}%s " D_UNIT_KWARH "{e}"
-  ;
-#endif  // USE_WEBSERVER
-
-/*
 void FifLEShow(bool json) {
-  char total_reactive_chr[FLOATSZ];
-  dtostrfd(Le01mr.total_reactive, Settings->flag2.energy_resolution, total_reactive_chr);
-  char total_active_chr[FLOATSZ];
-  dtostrfd(Le01mr.total_active, Settings->flag2.energy_resolution, total_active_chr);
-
   if (json) {
-    ResponseAppend_P(PSTR(",\"" D_JSON_TOTAL_ACTIVE "\":%s,\"" D_JSON_TOTAL_REACTIVE "\":%s"),
-      total_active_chr, total_reactive_chr);
+    ResponseAppend_P(PSTR(",\"" D_JSON_TOTAL_ACTIVE "\":%s"), EnergyFmt(&Le01mr.total_active, Settings->flag2.energy_resolution));
+    ResponseAppend_P(PSTR(",\"" D_JSON_TOTAL_REACTIVE "\":%s"), EnergyFmt(&Le01mr.total_reactive, Settings->flag2.energy_resolution));
 #ifdef USE_WEBSERVER
   } else {
-    WSContentSend_PD(HTTP_ENERGY_LE01MR, total_active_chr, total_reactive_chr);
-#endif  // USE_WEBSERVER
-  }
-}
-*/
-
-void FifLEShow(bool json) {
-  char value_chr[GUISZ];
-  char value2_chr[GUISZ];
-
-  if (json) {
-    ResponseAppend_P(PSTR(",\"" D_JSON_TOTAL_ACTIVE "\":%s,\"" D_JSON_TOTAL_REACTIVE "\":%s"),
-      EnergyFormat(value_chr, &Le01mr.total_active, Settings->flag2.energy_resolution),
-      EnergyFormat(value2_chr, &Le01mr.total_reactive, Settings->flag2.energy_resolution));
-#ifdef USE_WEBSERVER
-  } else {
-    WSContentSend_PD(HTTP_ENERGY_LE01MR, WebEnergyFormat(value_chr, &Le01mr.total_active, Settings->flag2.energy_resolution),
-                                         WebEnergyFormat(value2_chr, &Le01mr.total_reactive, Settings->flag2.energy_resolution));
-
+    WSContentSend_PD(HTTP_SNS_TOTAL_ACTIVE, WebEnergyFmt(&Le01mr.total_active, Settings->flag2.energy_resolution));
+    WSContentSend_PD(HTTP_SNS_TOTAL_REACTIVE, WebEnergyFmt(&Le01mr.total_reactive, Settings->flag2.energy_resolution));
 #endif  // USE_WEBSERVER
   }
 }
@@ -282,7 +252,7 @@ void FifLEShow(bool json) {
  * Interface
 \*********************************************************************************************/
 
-bool Xnrg13(uint8_t function)
+bool Xnrg13(uint32_t function)
 {
   bool result = false;
 
@@ -294,11 +264,7 @@ bool Xnrg13(uint8_t function)
       FifLEShow(1);
       break;
 #ifdef USE_WEBSERVER
-#ifdef USE_ENERGY_COLUMN_GUI
     case FUNC_WEB_COL_SENSOR:
-#else   // not USE_ENERGY_COLUMN_GUI
-    case FUNC_WEB_SENSOR:
-#endif  // USE_ENERGY_COLUMN_GUI
       FifLEShow(0);
       break;
 #endif  // USE_WEBSERVER

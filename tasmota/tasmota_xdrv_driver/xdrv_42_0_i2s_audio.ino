@@ -16,7 +16,7 @@
   You should have received a copy of the GNU General Public License
   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-
+#if ESP8266 || (ESP_IDF_VERSION_MAJOR < 5)
 #if (defined(USE_I2S_AUDIO) || defined(USE_TTGO_WATCH) || defined(USE_M5STACK_CORE2) || defined(ESP32S3_BOX))
 /*********************************************************************************************\
  * I2S support using an external DAC or a speaker connected to GPIO03 using a transistor
@@ -36,6 +36,19 @@
 //#define USE_I2S_NO_DAC                         // Add support for transistor-based output without DAC
 //#define USE_I2S_WEBRADIO                       // Add support for web radio
 //#define USE_I2S_SAY_TIME                       // Add support for english speaking clock
+//#define USE_I2S_RTTTL                          // Add support for Rtttl playback
+//#define USE_LSB                                // Add support for LSBJ chips, e.g. TM8211/PT8211
+// Microphone support
+//#define USE_I2S_MIC                            // Add support for I2S microphone
+  //#define MIC_CHANNELS 1                       // 1 = mono (I2S_CHANNEL_FMT_ONLY_RIGHT), 2 = stereo (I2S_CHANNEL_FMT_RIGHT_LEFT)
+  //#define MICSRATE 32000                       // Set sample rate
+  //#define USE_INMP441                          // Add support for INMP441 MEMS microphone
+  //#define MIC_PDM                              // Set microphone as PDM (only on ESP32)
+//#define USE_SHINE                              // Use MP3 encoding (only on ESP32 with PSRAM)
+//#define MP3_MIC_STREAM                         // Add support for streaming microphone via http (only on ESP32 with PSRAM)
+  //#define MP3_STREAM_PORT 81                   // Choose MP3 stream port (default = 81)
+//#define I2S_BRIDGE                             // Add support for UDP PCM audio bridge
+  //#define I2S_BRIDGE_PORT    6970              // Set bridge port (default = 6970)
 
 #include "AudioFileSourcePROGMEM.h"
 #include "AudioFileSourceID3.h"
@@ -223,6 +236,10 @@ void sayTime(int hour, int minutes);
 void Cmd_MicRec(void);
 void Cmd_wav2mp3(void);
 void Cmd_Time(void);
+#ifdef USE_I2S_RTTTL
+void Rtttl(char *buffer);
+void Cmd_I2SRtttl(void);
+#endif
 
 void copy_micpars(uint32_t port) {
   audio_i2s.mic_mclk = audio_i2s.mclk;
@@ -247,6 +264,7 @@ int32_t I2S_Init_0(void) {
 #else
     audio_i2s.out = new AudioOutputI2S();
 #endif
+
     audio_i2s.bclk = DAC_IIS_BCK;
     audio_i2s.ws = DAC_IIS_WS;
     audio_i2s.dout = DAC_IIS_DOUT;
@@ -317,6 +335,11 @@ int32_t I2S_Init_0(void) {
   if (audio_i2s.mic_port != 0) {
     AddLog(LOG_LEVEL_INFO, PSTR("Init audio I2S mic: port=%d, bclk=%d, ws=%d, din=%d"), audio_i2s.mic_port, audio_i2s.mic_bclk, audio_i2s.mic_ws, audio_i2s.mic_din);
   }
+
+#ifdef USE_I2S_LSB
+  audio_i2s.out->SetLsbJustified(true);
+#endif // Allow supporting LSBJ chips, e.g. TM8211/PT8211
+
 #else
 
 #ifdef USE_I2S_NO_DAC
@@ -606,6 +629,9 @@ const char kI2SAudio_Commands[] PROGMEM = "I2S|"
 #ifdef USE_I2S_SAY_TIME
   "|Time"
 #endif // USE_I2S_SAY_TIME
+#ifdef USE_I2S_RTTTL
+  "|Rtttl"
+#endif
 #ifdef ESP32
   "|Play"
 #ifdef USE_I2S_WEBRADIO
@@ -629,6 +655,9 @@ void (* const I2SAudio_Command[])(void) PROGMEM = {
 #ifdef USE_I2S_SAY_TIME
   ,&Cmd_Time
 #endif // USE_I2S_SAY_TIME
+#ifdef USE_I2S_RTTTL
+  ,&Cmd_I2SRtttl
+#endif
 #ifdef ESP32
   ,&Cmd_Play
 #ifdef USE_I2S_WEBRADIO
@@ -671,6 +700,15 @@ void Cmd_Say(void) {
   ResponseCmndChar(XdrvMailbox.data);
 }
 
+#ifdef USE_I2S_RTTTL
+void Cmd_I2SRtttl(void) {
+  if (XdrvMailbox.data_len > 0) {
+    Rtttl(XdrvMailbox.data);
+  }
+  ResponseCmndChar(XdrvMailbox.data);
+}
+#endif
+
 /*********************************************************************************************\
  * Interface
 \*********************************************************************************************/
@@ -679,7 +717,7 @@ void i2s_mp3_loop(void);
 void i2s_mp3_init(void);
 void MP3ShowStream(void);
 
-bool Xdrv42(uint8_t function) {
+bool Xdrv42(uint32_t function) {
   bool result = false;
 
   switch (function) {
@@ -726,4 +764,5 @@ bool Xdrv42(uint8_t function) {
   return result;
 }
 
-#endif  // USE_I2S_AUDIO
+#endif // USE_I2S_AUDIO
+#endif // ESP8266 || (ESP_IDF_VERSION_MAJOR < 5)

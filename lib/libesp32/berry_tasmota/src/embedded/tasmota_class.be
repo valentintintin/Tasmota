@@ -1,7 +1,8 @@
 #- Native code used for testing and code solidification -#
 #- Do not use it -#
 
-class Trigger end     # for compilation
+class Trigger end       # for compilation
+class Rule_Matche end   # for compilation
 
 tasmota = nil
 #@ solidify:Tasmota
@@ -33,7 +34,7 @@ class Tasmota
     try
       import debug
       self._debug_present = true
-    except .. 
+    except ..
     end
     # declare `UrlFetch` command
     self.add_cmd('UrlFetch', def (cmd, idx, payload, payload_json) self.urlfetch_cmd(cmd, idx, payload, payload_json) end)
@@ -63,24 +64,33 @@ class Tasmota
     end
   end
 
+  # find a string in a list, case insensitive
+  def find_list_i(l, vali)
+    import string
+    var idx = 0
+    var valu = string.toupper(vali)
+    while idx < size(l)
+      if string.toupper(l[idx]) == valu
+        return idx
+      end
+      idx += 1
+    end
+    return nil
+  end
 
   # split the item when there is an operator, returns a list of (left,op,right)
-  # ex: "Dimmer>50" -> ["Dimmer",tasmota_gt,"50"]
+  #-
+    assert(tasmota.find_op("Dimmer>50") == ['Dimmer', '>', '50'])
+    assert(tasmota.find_op("Dimmer") == ['Dimmer', nil, nil])
+    assert(tasmota.find_op("Status!==Connected") == ['Status', '!==', 'Connected'])
+  -#
   def find_op(item)
-    import string
-    var op_chars = '=<>!'
-    var pos = self._find_op(item, false)   # initial run
-    if pos >= 0
-      var op_split = string.split(item,pos)
-      var op_left = op_split[0]
-      var op_rest = op_split[1]
-      pos = self._find_op(op_rest, true)
-      if pos >= 0
-        var op_split2 = string.split(op_rest,pos)
-        var op_middle = op_split2[0]
-        var op_right = op_split2[1]
-        return [op_left,op_middle,op_right]
-      end
+    var idx_composite = self._find_op(item)
+    if idx_composite >= 0
+      var idx_start = idx_composite & 0x7FFF
+      var idx_end = idx_composite >> 16
+
+      return [ item[0 .. idx_start-1], item[idx_start .. idx_end - 1], item[idx_end ..]]
     end
     return [item, nil, nil]
   end
@@ -88,11 +98,11 @@ class Tasmota
   # Rules
   def add_rule(pat, f, id)
     self.check_not_method(f)
-    if !self._rules
-      self._rules=[]
+    if self._rules == nil
+      self._rules = []
     end
     if type(f) == 'function'
-      self._rules.push(Trigger(pat, f, id))
+      self._rules.push(Trigger(self.Rule_Matcher.parse(pat), f, id))
     else
       raise 'value_error', 'the second argument is not a function'
     end
@@ -102,7 +112,7 @@ class Tasmota
     if self._rules
       var i = 0
       while i < size(self._rules)
-        if self._rules[i].trig == pat && self._rules[i].id == id
+        if self._rules[i].trig.rule == pat && self._rules[i].id == id
           self._rules.remove(i)  #- don't increment i since we removed the object -#
         else
           i += 1
@@ -112,43 +122,19 @@ class Tasmota
   end
 
   # Rules trigger if match. return true if match, false if not
-  def try_rule(event, rule, f)
-    import string
-    var rl_list = self.find_op(rule)
-    var sub_event = event
-    var rl = string.split(rl_list[0],'#')
-    var i = 0
-    while i < size(rl)
-    # for it:rl
-      var it = rl[i]
-      var found=self.find_key_i(sub_event,it)
-      if found == nil return false end
-      sub_event = sub_event[found]
-      i += 1
-    end
-    var op=rl_list[1]
-    var op2=rl_list[2]
-    if op
-      if   op=='=='
-        if str(sub_event) != str(op2)   return false end
-      elif op=='!=='
-        if str(sub_event) == str(op2)   return false end
-      elif op=='='
-        if real(sub_event) != real(op2) return false end
-      elif op=='!='
-        if real(sub_event) == real(op2) return false end
-      elif op=='>'
-        if real(sub_event) <= real(op2) return false end
-      elif op=='>='
-        if real(sub_event) < real(op2)  return false end
-      elif op=='<'
-        if real(sub_event) >= real(op2) return false end
-      elif op=='<='
-        if real(sub_event) > real(op2)  return false end
+  #
+  # event: native Berry map representing the JSON input
+  # rule: Rule_Matcher instance
+  # f: callback to call in case of a match
+  def try_rule(event, rule_matcher, f)
+    var sub_event = rule_matcher.match(event)
+    if sub_event != nil
+      if f != nil
+        f(sub_event, rule_matcher.trigger, event)
       end
+      return true
     end
-    f(sub_event, rl_list[0], event)
-    return true
+    return false
   end
 
   # Run rules, i.e. check each individual rule
@@ -158,11 +144,11 @@ class Tasmota
     var save_cmd_res = self.cmd_res     # save initial state (for reentrance)
     if self._rules || save_cmd_res != nil  # if there is a rule handler, or we record rule results
       import json
-      
+
       self.cmd_res = nil                  # disable sunsequent recording of results
       var ret = false
 
-      var ev = json.load(ev_json)   # returns nil if invalid JSON
+      var ev = json.load(ev_json)         # returns nil if invalid JSON
       if ev == nil
         self.log('BRY: ERROR, bad json: '+ev_json, 3)
         ev = ev_json                # revert to string
@@ -213,7 +199,9 @@ class Tasmota
 
   def set_timer(delay,f,id)
     self.check_not_method(f)
-    if !self._timers self._timers=[] end
+    if self._timers == nil
+      self._timers=[]
+    end
     self._timers.push(Trigger(self.millis(delay),f,id))
   end
 
@@ -268,11 +256,13 @@ class Tasmota
       end
     end
   end
-  
+
   # crontab style recurring events
   def add_cron(pattern,f,id)
     self.check_not_method(f)
-    if !self._crons self._crons=[] end
+    if self._crons == nil
+      self._crons=[]
+    end
 
     var cron_obj = ccronexpr(str(pattern))    # can fail, throwing an exception
     var next_time = cron_obj.next()
@@ -312,8 +302,8 @@ class Tasmota
   # Add command to list
   def add_cmd(c,f)
     self.check_not_method(f)
-    if !self._ccmd
-      self._ccmd={}
+    if self._ccmd == nil
+      self._ccmd = {}
     end
     if type(f) == 'function'
       self._ccmd[c]=f
@@ -363,9 +353,8 @@ class Tasmota
   end
 
   def time_str(time)
-    import string
     var tm = self.time_dump(time)
-    return string.format("%04d-%02d-%02dT%02d:%02d:%02d", tm['year'], tm['month'], tm['day'], tm['hour'], tm['min'], tm['sec'])
+    return format("%04d-%02d-%02dT%02d:%02d:%02d", tm['year'], tm['month'], tm['day'], tm['hour'], tm['min'], tm['sec'])
   end
 
   def load(f)
@@ -403,8 +392,7 @@ class Tasmota
         f.close()
       except .. as e
         if f != nil     f.close() end
-        import string
-        print(string.format('BRY: failed to load compiled \'%s\' (%s)',fname_bec,e))
+        print(format('BRY: failed to load compiled \'%s\' (%s)',fname_bec,e))
       end
       return nil
     end
@@ -426,8 +414,7 @@ class Tasmota
         var compiled = compile(f_name, 'file')
         return compiled
       except .. as e, m
-        import string
-        print(string.format('BRY: failed to load \'%s\' (%s - %s)',f_name,e,m))
+        print(format('BRY: failed to load \'%s\' (%s - %s)',f_name,e,m))
       end
       return nil
     end
@@ -440,8 +427,7 @@ class Tasmota
           compiled_code()
           return true
         except .. as e, m
-          import string
-          print(string.format("BRY: failed to run compiled code '%s' - %s", e, m))
+          print(format("BRY: failed to run compiled code '%s' - %s", e, m))
         end
       end
       return false
@@ -497,7 +483,7 @@ class Tasmota
       end
       # print("f_time",f_time,"f_time_bec",f_time_bec,"suffix_bec",suffix_bec)
     end
-    
+
     # recall the working directory
     if f_archive
       self.wd = f_prefix + "#"
@@ -514,10 +500,10 @@ class Tasmota
       var bec_version = try_get_bec_version(f_name_bec)
       var version_ok = true
       if bec_version == nil
-        print(string.format('BRY: corrupt bytecode \'%s\'',f_name_bec))
+        print(format('BRY: corrupt bytecode \'%s\'',f_name_bec))
         version_ok = false
       elif bec_version != 0x04          # -- this is the currenlty supported version
-        print(string.format('BRY: bytecode has wrong version \'%s\' (%i)',f_name_bec,bec_version))
+        print(format('BRY: bytecode has wrong version \'%s\' (%i)',f_name_bec,bec_version))
         version_ok = false
       end
 
@@ -543,7 +529,7 @@ class Tasmota
       try
         self.save(f_name_bec, compiled_code)
       except .. as e
-        print(string.format('BRY: could not save compiled file %s (%s)',f_name_bec,e))
+        print(format('BRY: could not save compiled file %s (%s)',f_name_bec,e))
       end
     end
     # call the compiled code
@@ -567,7 +553,8 @@ class Tasmota
 
     # iterate and call each closure
     var i = 0
-    while i < size(fl)
+    var sz = size(fl)
+    while i < sz
       # note: this is not guarded in try/except for performance reasons. The inner function must not raise exceptions
       fl[i]()
       i += 1
@@ -576,7 +563,9 @@ class Tasmota
 
   def add_fast_loop(cl)
     self.check_not_method(cl)
-    if !self._fl  self._fl = [] end
+    if self._fl == nil
+      self._fl = []
+    end
     if type(cl) != 'function' raise "value_error", "argument must be a function" end
     self.global.fast_loop_enabled = 1      # enable fast_loop at global level: `TasmotaGlobal.fast_loop_enabled = true`
     self._fl.push(cl)
@@ -592,7 +581,6 @@ class Tasmota
 
   def event(event_type, cmd, idx, payload, raw)
     import introspect
-    import string
     if event_type=='every_50ms'
       self.run_deferred()
     end  #- first run deferred events -#
@@ -622,7 +610,7 @@ class Tasmota
             done = f(d, cmd, idx, payload, raw) || done
             if done && !keep_going   break end
           except .. as e,m
-            print(string.format("BRY: Exception> '%s' - %s", e, m))
+            print(format("BRY: Exception> '%s' - %s", e, m))
             if self._debug_present
               import debug
               debug.traceback()
@@ -647,8 +635,10 @@ class Tasmota
       raise "value_error", "instance required"
     end
     if self._drivers
-      self._drivers.push(d)
-        else
+      if self._drivers.find(d) == nil     # add only if not already added
+        self._drivers.push(d)
+      end
+    else
       self._drivers = [d]
     end
   end
@@ -663,18 +653,28 @@ class Tasmota
   end
 
   # cmd high-level function
-  def cmd(command)
+  # mute: (opt, bool) if true temporarily reduce log_level to 1
+  def cmd(command, mute)
     var save_cmd_res = self.cmd_res     # restore value on exit (for reentrant)
     self.cmd_res = true      # signal buffer capture
 
+    var maxlog_level = tasmota.global.maxlog_level
+    if mute                 # mute logging
+      if maxlog_level >= 2 tasmota.global.maxlog_level = 1 end
+    end
+
     self._cmd(command)
-    
+
     var ret = nil
     if self.cmd_res != true       # unchanged
       ret = self.cmd_res
     end
     self.cmd_res = save_cmd_res       # restore previous state
-    
+
+    # restore log_level
+    if mute
+      tasmota.global.maxlog_level = maxlog_level
+    end
     return ret
   end
 
@@ -716,14 +716,14 @@ class Tasmota
     var g = 255
     # we take brightness at 100%, brightness should be set separately
     hue = hue % 360   # normalize to 0..359
-  
+
     if sat > 0
       var i = hue / 60    # quadrant 0..5
       var f = hue % 60    # 0..59
       var p = 255 - sat
       var q = tasmota.scale_uint(f, 0, 60, 255, p)    # 0..59
       var t = tasmota.scale_uint(f, 0, 60, p, 255)
-  
+
       if   i == 0
         # r = 255
         g = t
@@ -750,7 +750,7 @@ class Tasmota
         b = q
       end
     end
-  
+
     return (r << 16) | (g << 8) | b
   end
 
@@ -764,6 +764,7 @@ class Tasmota
       end
     end
     var wc = webclient()
+    wc.set_follow_redirects(true)
     wc.begin(url)
     var st = wc.GET()
     if st != 200

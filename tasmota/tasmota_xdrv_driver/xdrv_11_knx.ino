@@ -52,6 +52,8 @@ uint8_t       Settings->knx_CB_param[MAX_KNX_CB]     Type of Output (set relay, 
 
 #include <esp-knx-ip.h>         // KNX Library
 
+bool knx_started = false;
+
 address_t KNX_physs_addr;  // Physical KNX address of this device
 address_t KNX_addr;        // KNX Address converter variable
 
@@ -564,7 +566,7 @@ void KNX_CB_Action(message_t const &msg, void *arg)
     float tempvar = knx.data_to_4byte_float(msg.data);
     dtostrfd(tempvar,2,tempchar);
   }
-  AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_KNX D_RECEIVED_FROM " %d.%d.%d " D_COMMAND " %s: %s " D_TO " %s"),
+  AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_KNX D_RECEIVED_FROM " %d/%d/%d " D_COMMAND " %s: %s " D_TO " %s"),
    msg.received_on.ga.area, msg.received_on.ga.line, msg.received_on.ga.member,
    (msg.ct == KNX_CT_WRITE) ? D_KNX_COMMAND_WRITE : (msg.ct == KNX_CT_READ) ? D_KNX_COMMAND_READ : D_KNX_COMMAND_OTHER,
    tempchar,
@@ -647,58 +649,58 @@ void KNX_CB_Action(message_t const &msg, void *arg)
 #if defined(USE_ENERGY_SENSOR)      
       else if (chan->type == KNX_ENERGY_VOLTAGE) // Reply KNX_ENERGY_VOLTAGE
       {
-        knx.answer_4byte_float(msg.received_on, Energy.voltage[0]);
+        knx.answer_4byte_float(msg.received_on, Energy->voltage[0]);
         if (Settings->flag.knx_enable_enhancement) {
-          knx.answer_4byte_float(msg.received_on, Energy.voltage[0]);
-          knx.answer_4byte_float(msg.received_on, Energy.voltage[0]);
+          knx.answer_4byte_float(msg.received_on, Energy->voltage[0]);
+          knx.answer_4byte_float(msg.received_on, Energy->voltage[0]);
         }
       }
       else if (chan->type == KNX_ENERGY_CURRENT) // Reply KNX_ENERGY_CURRENT
       {
-        knx.answer_4byte_float(msg.received_on, Energy.current[0]);
+        knx.answer_4byte_float(msg.received_on, Energy->current[0]);
         if (Settings->flag.knx_enable_enhancement) {
-          knx.answer_4byte_float(msg.received_on, Energy.current[0]);
-          knx.answer_4byte_float(msg.received_on, Energy.current[0]);
+          knx.answer_4byte_float(msg.received_on, Energy->current[0]);
+          knx.answer_4byte_float(msg.received_on, Energy->current[0]);
         }
       }
       else if (chan->type == KNX_ENERGY_POWER) // Reply KNX_ENERGY_POWER
       {
-        knx.answer_4byte_float(msg.received_on, Energy.active_power[0]);
+        knx.answer_4byte_float(msg.received_on, Energy->active_power[0]);
         if (Settings->flag.knx_enable_enhancement) {
-          knx.answer_4byte_float(msg.received_on, Energy.active_power[0]);
-          knx.answer_4byte_float(msg.received_on, Energy.active_power[0]);
+          knx.answer_4byte_float(msg.received_on, Energy->active_power[0]);
+          knx.answer_4byte_float(msg.received_on, Energy->active_power[0]);
         }
       }
       else if (chan->type == KNX_ENERGY_POWERFACTOR) // Reply KNX_ENERGY_POWERFACTOR
       {
-        knx.answer_4byte_float(msg.received_on, Energy.power_factor[0]);
+        knx.answer_4byte_float(msg.received_on, Energy->power_factor[0]);
         if (Settings->flag.knx_enable_enhancement) {
-          knx.answer_4byte_float(msg.received_on, Energy.power_factor[0]);
-          knx.answer_4byte_float(msg.received_on, Energy.power_factor[0]);
+          knx.answer_4byte_float(msg.received_on, Energy->power_factor[0]);
+          knx.answer_4byte_float(msg.received_on, Energy->power_factor[0]);
         }
       }
       else if (chan->type == KNX_ENERGY_YESTERDAY) // Reply KNX_ENERGY_YESTERDAY
       {
-        knx.answer_4byte_float(msg.received_on, Energy.yesterday_sum);
+        knx.answer_4byte_float(msg.received_on, Energy->yesterday_sum);
         if (Settings->flag.knx_enable_enhancement) {
-          knx.answer_4byte_float(msg.received_on, Energy.yesterday_sum);
-          knx.answer_4byte_float(msg.received_on, Energy.yesterday_sum);
+          knx.answer_4byte_float(msg.received_on, Energy->yesterday_sum);
+          knx.answer_4byte_float(msg.received_on, Energy->yesterday_sum);
         }
       }
       else if (chan->type == KNX_ENERGY_DAILY) // Reply KNX_ENERGY_DAILY
       {
-        knx.answer_4byte_float(msg.received_on, Energy.daily_sum);
+        knx.answer_4byte_float(msg.received_on, Energy->daily_sum);
         if (Settings->flag.knx_enable_enhancement) {
-          knx.answer_4byte_float(msg.received_on, Energy.daily_sum);
-          knx.answer_4byte_float(msg.received_on, Energy.daily_sum);
+          knx.answer_4byte_float(msg.received_on, Energy->daily_sum);
+          knx.answer_4byte_float(msg.received_on, Energy->daily_sum);
         }
       }
       else if (chan->type == KNX_ENERGY_TOTAL) // Reply KNX_ENERGY_TOTAL
       {
-        knx.answer_4byte_float(msg.received_on, Energy.total_sum);
+        knx.answer_4byte_float(msg.received_on, Energy->total_sum);
         if (Settings->flag.knx_enable_enhancement) {
-          knx.answer_4byte_float(msg.received_on, Energy.total_sum);
-          knx.answer_4byte_float(msg.received_on, Energy.total_sum);
+          knx.answer_4byte_float(msg.received_on, Energy->total_sum);
+          knx.answer_4byte_float(msg.received_on, Energy->total_sum);
         }
       }
 #endif
@@ -736,7 +738,7 @@ void KnxUpdatePowerState(uint8_t device, power_t state)
       knx.write_1bit(KNX_addr, device_param[device -1].last_state);
     }
 
-    AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_KNX "%s = %d " D_SENT_TO " %d.%d.%d"),
+    AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_KNX "%s = %d " D_SENT_TO " %d/%d/%d"),
      device_param_ga[device -1], device_param[device -1].last_state,
      KNX_addr.ga.area, KNX_addr.ga.line, KNX_addr.ga.member);
 
@@ -770,7 +772,7 @@ void KnxSendButtonPower(void)
       knx.write_1bit(KNX_addr, !(state == 0));
     }
 
-    AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_KNX "%s = %d " D_SENT_TO " %d.%d.%d"),
+    AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_KNX "%s = %d " D_SENT_TO " %d/%d/%d"),
      device_param_ga[device + 7], !(state == 0),
      KNX_addr.ga.area, KNX_addr.ga.line, KNX_addr.ga.member);
 
@@ -801,7 +803,7 @@ void KnxSensor(uint8_t sensor_type, float value)
       knx.write_4byte_float(KNX_addr, value);
     }
 
-    AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_KNX "%s " D_SENT_TO " %d.%d.%d"),
+    AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_KNX "%s " D_SENT_TO " %d/%d/%d"),
      device_param_ga[sensor_type -1],
      KNX_addr.ga.area, KNX_addr.ga.line, KNX_addr.ga.member);
 
@@ -1037,7 +1039,7 @@ void KNX_Save_Settings(void)
   KNX_addr.pa.member = stmp.toInt();
   Settings->knx_physsical_addr = KNX_addr.value;
   knx.physical_address_set( KNX_addr ); // Set Physical KNX Address of the device
-  AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_KNX D_KNX_PHYSICAL_ADDRESS ": %d.%d.%d "),
+  AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_KNX D_KNX_PHYSICAL_ADDRESS ": %d.%d.%d"),
    KNX_addr.pa.area, KNX_addr.pa.line, KNX_addr.pa.member );
 
   AddLog(LOG_LEVEL_DEBUG, PSTR(D_LOG_KNX "GA: %d"),
@@ -1085,7 +1087,7 @@ void CmndKnxTxCmnd(void)
         knx.write_1bit(KNX_addr, !(XdrvMailbox.payload == 0));
       }
 
-      AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_KNX "%s = %d " D_SENT_TO " %d.%d.%d"),
+      AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_KNX "%s = %d " D_SENT_TO " %d/%d/%d"),
        device_param_ga[XdrvMailbox.index + KNX_SLOT1 -2], !(XdrvMailbox.payload == 0),
        KNX_addr.ga.area, KNX_addr.ga.line, KNX_addr.ga.member);
 
@@ -1114,7 +1116,7 @@ void CmndKnxTxVal(void)
         knx.write_4byte_float(KNX_addr, tempvar);
       }
 
-      AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_KNX "%s = %s " D_SENT_TO " %d.%d.%d"),
+      AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_KNX "%s = %s " D_SENT_TO " %d/%d/%d"),
        device_param_ga[XdrvMailbox.index + KNX_SLOT1 -2], XdrvMailbox.data,
        KNX_addr.ga.area, KNX_addr.ga.line, KNX_addr.ga.member);
 
@@ -1141,7 +1143,7 @@ void CmndKnxTxScene(void)
         knx.write_1byte_uint(KNX_addr, tempvar);
       }
 
-      AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_KNX "%s = %s " D_SENT_TO " %d.%d.%d"),
+      AddLog(LOG_LEVEL_INFO, PSTR(D_LOG_KNX "%s = %s " D_SENT_TO " %d/%d/%d"),
        device_param_ga[KNX_SCENE-1], XdrvMailbox.data,
        KNX_addr.ga.area, KNX_addr.ga.line, KNX_addr.ga.member);
       ResponseCmndIdxChar (XdrvMailbox.data);
@@ -1298,7 +1300,7 @@ void CmndKnxCb(void)
  * Interface
 \*********************************************************************************************/
 
-bool Xdrv11(uint8_t function)
+bool Xdrv11(uint32_t function)
 {
   bool result = false;
     switch (function) {
@@ -1328,6 +1330,15 @@ bool Xdrv11(uint8_t function)
         break;
       case FUNC_PRE_INIT:
         KNX_INIT();
+        break;
+      case FUNC_NETWORK_UP:
+        if (!knx_started && Settings->flag.knx_enabled) {  // CMND_KNX_ENABLED
+          KNXStart();
+          knx_started = true;
+        }
+        break;
+      case FUNC_NETWORK_DOWN:
+        knx_started = false;
         break;
 //      case FUNC_SET_POWER:
 //        break;

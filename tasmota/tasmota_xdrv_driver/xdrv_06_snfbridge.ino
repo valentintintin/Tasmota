@@ -105,7 +105,7 @@ uint32_t rf_search_and_write(uint8_t *data, size_t size) {
     if (rec_end == sizeof(buf)) { return 9; }  // File too large - Failed to decode RF firmware
     rec_size = rec_end - rec_start;
 
-//    AddLogBuffer(LOG_LEVEL_DEBUG, (uint8_t*)&buf + rec_start, rec_size);
+//    AddLog(LOG_LEVEL_DEBUG, PSTR("DBG: %*_H"), rec_size, (uint8_t*)&buf + rec_start);
 
     err = rf_decode_and_write(buf + rec_start, rec_size);
     if (err != 0) { return err; }
@@ -128,6 +128,9 @@ uint8_t rf_erase_flash(void) {
     }
     err = c2_device_erase();
     if (err != C2_SUCCESS) {
+
+//      AddLog(LOG_LEVEL_DEBUG, PSTR("RFB: Device erase error %d"), err);
+
       if (i < 3) {
         c2_reset();              // Reset RF chip and try again
       } else {
@@ -194,7 +197,7 @@ void SonoffBridgeReceived(void)
   char rfkey[8];
   char stemp[16];
 
-  AddLogSerial(LOG_LEVEL_DEBUG);
+  AddLogSerial();
 
   if (0xA2 == TasmotaGlobal.serial_in_buffer[0]) {       // Learn timeout
     SonoffBridgeLearnFailed();
@@ -513,7 +516,7 @@ void SonoffBridgeAddButton(void) {
     for (uint32_t j = 0; j < 4; j++) {
       idx++;
       WSContentSend_P(PSTR("<td style='width:25%%'><button onclick='la(\"&k=%d\");'>%s</button></td>"), idx,  // &k is related to WebGetArg("k", tmp, sizeof(tmp));
-        (strlen(SettingsText(SET_BUTTON1 + idx -1))) ? SettingsText(SET_BUTTON1 + idx -1) : itoa(idx, number, 10));
+        (strlen(GetWebButton(idx -1))) ? GetWebButton(idx -1) : itoa(idx, number, 10));
     }
   }
   WSContentSend_P(PSTR("</tr></table>"));
@@ -535,7 +538,7 @@ void SonoffBridgeWebGetArg(void) {
  * Interface
 \*********************************************************************************************/
 
-bool Xdrv06(uint8_t function)
+bool Xdrv06(uint32_t function)
 {
   bool result = false;
 

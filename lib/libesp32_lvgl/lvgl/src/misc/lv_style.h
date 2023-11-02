@@ -70,11 +70,6 @@ LV_EXPORT_CONST_INT(LV_IMG_ZOOM_NONE);
 #endif
 // *INDENT-ON*
 
-/** On simple system, don't waste resources on gradients */
-#if !defined(LV_DRAW_COMPLEX) || !defined(LV_GRADIENT_MAX_STOPS)
-#define LV_GRADIENT_MAX_STOPS 2
-#endif
-
 #define LV_STYLE_PROP_META_INHERIT 0x8000
 #define LV_STYLE_PROP_META_INITIAL 0x4000
 #define LV_STYLE_PROP_META_MASK (LV_STYLE_PROP_META_INHERIT | LV_STYLE_PROP_META_INITIAL)
@@ -265,23 +260,24 @@ typedef enum {
 
     /*Group 6*/
     LV_STYLE_OPA                    = 96,
-    LV_STYLE_COLOR_FILTER_DSC       = 97,
-    LV_STYLE_COLOR_FILTER_OPA       = 98,
-    LV_STYLE_ANIM                   = 99,
-    LV_STYLE_ANIM_TIME              = 100,
-    LV_STYLE_ANIM_SPEED             = 101,
-    LV_STYLE_TRANSITION             = 102,
-    LV_STYLE_BLEND_MODE             = 103,
-    LV_STYLE_TRANSFORM_WIDTH        = 104,
-    LV_STYLE_TRANSFORM_HEIGHT       = 105,
-    LV_STYLE_TRANSLATE_X            = 106,
-    LV_STYLE_TRANSLATE_Y            = 107,
-    LV_STYLE_TRANSFORM_ZOOM         = 108,
-    LV_STYLE_TRANSFORM_ANGLE        = 109,
-    LV_STYLE_TRANSFORM_PIVOT_X      = 110,
-    LV_STYLE_TRANSFORM_PIVOT_Y      = 111,
+    LV_STYLE_OPA_LAYERED            = 97,
+    LV_STYLE_COLOR_FILTER_DSC       = 98,
+    LV_STYLE_COLOR_FILTER_OPA       = 99,
+    LV_STYLE_ANIM                   = 100,
+    LV_STYLE_ANIM_TIME              = 101,
+    LV_STYLE_ANIM_SPEED             = 102,
+    LV_STYLE_TRANSITION             = 103,
+    LV_STYLE_BLEND_MODE             = 104,
+    LV_STYLE_TRANSFORM_WIDTH        = 105,
+    LV_STYLE_TRANSFORM_HEIGHT       = 106,
+    LV_STYLE_TRANSLATE_X            = 107,
+    LV_STYLE_TRANSLATE_Y            = 108,
+    LV_STYLE_TRANSFORM_ZOOM         = 109,
+    LV_STYLE_TRANSFORM_ANGLE        = 110,
+    LV_STYLE_TRANSFORM_PIVOT_X      = 111,
+    LV_STYLE_TRANSFORM_PIVOT_Y      = 112,
 
-    _LV_STYLE_LAST_BUILT_IN_PROP     = 111,
+    _LV_STYLE_LAST_BUILT_IN_PROP     = 112,
     _LV_STYLE_NUM_BUILT_IN_PROPS     = _LV_STYLE_LAST_BUILT_IN_PROP + 1,
 
     LV_STYLE_PROP_ANY                = 0xFFFF,

@@ -37,7 +37,7 @@ enum LoggingLevels {LOG_LEVEL_NONE, LOG_LEVEL_ERROR, LOG_LEVEL_INFO, LOG_LEVEL_D
 time_t dos2unixtime(uint32_t dostime)
      /* Return the Unix time_t value (GMT/UTC time) for the DOS format (local)
       * time dostime, where dostime is a four byte value (date in most
-      * significant word, time in least significant word), see dostime() 
+      * significant word, time in least significant word), see dostime()
       * function.
       */
 {
@@ -59,7 +59,7 @@ time_t dos2unixtime(uint32_t dostime)
 
 /********************************************************************
 ** Zip file parser
-** 
+**
 ********************************************************************/
 template <typename T> class LList;
 
@@ -119,12 +119,14 @@ protected:
 
 /********************************************************************
 ** Neutral file overlay
-** 
+**
 ********************************************************************/
 
 class ZipReadFileImpl;
 typedef std::shared_ptr<FileImpl> ZipReadFileImplPtr;
 
+
+// this is the proxy FileImpl - used for passing through real files.
 class ZipReadFileImpl : public FileImpl {
 public:
   ZipReadFileImpl(File f) { _f = f; }
@@ -163,7 +165,9 @@ public:
     return _f.isDirectory();
   }
   FileImplPtr openNextFile(const char* mode) {
-    return nullptr; // TODO
+    File f = _f.openNextFile(mode);
+    return ZipReadFileImplPtr(new ZipReadFileImpl(f));
+    //return nullptr; // TODO
   }
   void rewindDirectory(void) {
     return _f.rewindDirectory();
@@ -174,6 +178,27 @@ public:
   bool setBufferSize(size_t size) {
     return true;
   }
+  bool seekDir(long position){
+    if(!_f){
+        return false;
+    }
+    return _f.seekDir(position);
+  }
+  String getNextFileName(void)
+  {
+    if (!_f) {
+        return "";
+    }
+    return _f.getNextFileName();
+  }
+  String getNextFileName(bool *isDir)
+  {
+    if (!_f) {
+        return "";
+    }
+    return _f.getNextFileName(isDir);
+
+  }
 
 protected:
   File _f;
@@ -181,7 +206,7 @@ protected:
 
 /********************************************************************
 ** Subfile implementation
-** 
+**
 ** Takes a `File` object of the ZIP archive
 ** First byte in archive and len
 ********************************************************************/
@@ -284,7 +309,27 @@ public:
   FileImplPtr openNextFile(const char* mode) {
     return nullptr;     // TODO
   }
+  bool seekDir(long position){
+    if(!_f){
+        return false;
+    }
+    return _f.seekDir(position);
+  }
+  String getNextFileName(void)
+  {
+    if (!_f) {
+        return "";
+    }
+    return _f.getNextFileName();
+  }
+    String getNextFileName(bool *isDir)
+  {
+    if (!_f) {
+        return "";
+    }
+    return _f.getNextFileName(isDir);
 
+  }
   void rewindDirectory(void) {
     // ignore
   }
@@ -390,7 +435,7 @@ bool ZipArchive::parse(void) {
 
 /********************************************************************
 ** Encapsulation of FS and File to piggyback on Arduino
-** 
+**
 ********************************************************************/
 
 /* get the FS corresponding to the prefix, typically /sd/ for sdcard */
@@ -428,6 +473,9 @@ FileImplPtr ZipReadFSImpl::open(const char* path, const char* mode, const bool c
     char *tok;
     char *prefix = strtok_r(sub_path, "#", &tok);
     char *suffix = strtok_r(NULL, "", &tok);
+    if (!suffix || *suffix == 0){ // bad filename - nothing after #
+      return ZipReadFileImplPtr();    // return an error
+    }
     // if suffix starts with '/', skip the first char
     if (*suffix == '/') { suffix++; }
     // AddLog(LOG_LEVEL_DEBUG, "ZIP: prefix=%s suffix=%s", prefix, suffix);

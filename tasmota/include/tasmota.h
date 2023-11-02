@@ -28,12 +28,6 @@
 #define MQTT_DATA_STRING                    // Use heap instead of fixed memory for TasmotaGlobal.mqtt_data
 
 /*********************************************************************************************\
- * Default image
-\*********************************************************************************************/
-
-#define CODE_IMAGE_STR "tasmota"
-
-/*********************************************************************************************\
  * Power Type
 \*********************************************************************************************/
 
@@ -45,39 +39,39 @@ const uint32_t POWER_SIZE = 32;             // Power (relay) bit count
  * Constants
 \*********************************************************************************************/
 
+// Why 28? Because in addition to relays there may be lights and uint32_t bitmap can hold up to 32 devices
 #ifdef ESP8266
-const uint8_t MAX_RELAYS = 8;               // Max number of relays (up to 28)
+const uint8_t MAX_RELAYS = 8;               // Max number of relays selectable on GPIO
 const uint8_t MAX_INTERLOCKS = 4;           // Max number of interlock groups (up to MAX_INTERLOCKS_SET)
-const uint8_t MAX_SWITCHES = 8;             // Max number of switches (up to MAX_SWITCHES_SET)
-const uint8_t MAX_KEYS = 8;                 // Max number of keys or buttons (up to 28)
+const uint8_t MAX_SWITCHES = 8;             // Max number of switches selectable on GPIO
+const uint8_t MAX_KEYS = 8;                 // Max number of keys or buttons selectable on GPIO
 #endif  // ESP8266
 #ifdef ESP32
-const uint8_t MAX_RELAYS = 28;              // Max number of relays (up to 28)
+const uint8_t MAX_RELAYS = 28;              // Max number of relays selectable on GPIO
 const uint8_t MAX_INTERLOCKS = 14;          // Max number of interlock groups (up to MAX_INTERLOCKS_SET)
-const uint8_t MAX_SWITCHES = 28;            // Max number of switches (up to MAX_SWITCHES_SET)
-const uint8_t MAX_KEYS = 28;                // Max number of keys or buttons (up to 28)
+const uint8_t MAX_SWITCHES = 28;            // Max number of switches selectable on GPIO
+const uint8_t MAX_KEYS = 28;                // Max number of keys or buttons selectable on GPIO
 #endif  // ESP32
+const uint8_t MAX_RELAYS_SET = 32;          // Max number of relays
+const uint8_t MAX_KEYS_SET = 32;            // Max number of keys
 
 // Changes to the following MAX_ defines will impact settings layout
-const uint8_t MAX_INTERLOCKS_SET = 14;      // Max number of interlock groups (MAX_RELAYS / 2)
+const uint8_t MAX_INTERLOCKS_SET = 14;      // Max number of interlock groups (MAX_RELAYS_SET / 2)
 const uint8_t MAX_SWITCHES_SET = 28;        // Max number of switches
 const uint8_t MAX_LEDS = 4;                 // Max number of leds
 const uint8_t MAX_PWMS_LEGACY = 5;          // Max number of PWM channels in first settings block - Legacy limit for ESP8266, but extended for ESP32 (see below)
-#ifdef ESP32
-                                            // Max number of PWM channels (total including extended) - ESP32 only
-  #if defined(CONFIG_IDF_TARGET_ESP32)
-    const uint8_t MAX_PWMS = 16;            // ESP32: 16 ledc PWM channels in total - TODO for now
-  #elif defined(CONFIG_IDF_TARGET_ESP32S2)
-    const uint8_t MAX_PWMS = 8;             // ESP32S2: 8 ledc PWM channels in total
-  #elif defined(CONFIG_IDF_TARGET_ESP32S3)
-    const uint8_t MAX_PWMS = 8;             // ESP32S3: 8 ledc PWM channels in total
-  #elif defined(CONFIG_IDF_TARGET_ESP32C3)
-    const uint8_t MAX_PWMS = 6;             // ESP32C3: 6 ledc PWM channels in total
+#ifdef ESP32                                // Max number of PWM channels (total including extended) - ESP32 only
+  #if CONFIG_IDF_TARGET_ESP32
+  const uint8_t MAX_PWMS = 16;              // ESP32: 16 ledc PWM channels in total - TODO for now
+  #elif CONFIG_IDF_TARGET_ESP32S2 || CONFIG_IDF_TARGET_ESP32S3
+  const uint8_t MAX_PWMS = 8;               // ESP32S2/S3: 8 ledc PWM channels in total
+  #elif CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C6
+  const uint8_t MAX_PWMS = 6;               // ESP32C2/C3/C6: 6 ledc PWM channels in total
   #else
-    const uint8_t MAX_PWMS = 5;             // Unknown - revert to 5 PWM max
+  const uint8_t MAX_PWMS = 5;               // Unknown - revert to 5 PWM max
   #endif
 #else
-  const uint8_t MAX_PWMS = 5;               // (not used on ESP8266)
+const uint8_t MAX_PWMS = 5;                 // (not used on ESP8266)
 #endif
 const uint8_t MAX_COUNTERS = 4;             // Max number of counter sensors
 const uint8_t MAX_TIMERS = 16;              // Max number of Timers
@@ -103,19 +97,17 @@ const uint16_t VL53LXX_MAX_SENSORS = 8;     // Max number of VL53L0X sensors
 const uint8_t MAX_I2C = 2;                  // Max number of I2C controllers (ESP32 = 2)
 const uint8_t MAX_SPI = 2;                  // Max number of Hardware SPI controllers (ESP32 = 2)
 const uint8_t MAX_I2S = 2;                  // Max number of Hardware I2S controllers (ESP32 = 2)
-
-#if CONFIG_IDF_TARGET_ESP32
-const uint8_t MAX_RMT = 8;                  // Max number or RMT channels (ESP32 only)
-#elif CONFIG_IDF_TARGET_ESP32S2
-const uint8_t MAX_RMT = 4;                  // Max number or RMT channels (ESP32S2 only)
-#elif CONFIG_IDF_TARGET_ESP32S3
-const uint8_t MAX_RMT = 1;                  // Max number or RMT channels (ESP32S3 only)
-#elif CONFIG_IDF_TARGET_ESP32C3
-const uint8_t MAX_RMT = 2;                  // Max number or RMT channels (ESP32C3 only)
-#else
-const uint8_t MAX_RMT = 0;                  // Max number or RMT channels (0 if unknown)
-#endif
-
+  #if CONFIG_IDF_TARGET_ESP32
+  const uint8_t MAX_RMT = 8;                // Max number or RMT channels (ESP32 only)
+  #elif CONFIG_IDF_TARGET_ESP32S2
+  const uint8_t MAX_RMT = 4;                // Max number or RMT channels (ESP32S2 only)
+  #elif CONFIG_IDF_TARGET_ESP32S3
+  const uint8_t MAX_RMT = 1;                // Max number or RMT channels (ESP32S3 only)
+  #elif CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C6
+  const uint8_t MAX_RMT = 2;                // Max number or RMT channels (ESP32C3 only)
+  #else
+  const uint8_t MAX_RMT = 0;                // Max number or RMT channels (0 if unknown)
+  #endif
 #else
 const uint8_t MAX_I2C = 0;                  // Max number of I2C controllers (ESP8266 = 0, no choice)
 const uint8_t MAX_SPI = 0;                  // Max number of Hardware SPI controllers (ESP8266 = 0, no choice)
@@ -130,7 +122,7 @@ const uint8_t MAX_STATE_TEXT = 4;           // Max number of State names (OFF, O
 const uint8_t MAX_NTP_SERVERS = 3;          // Max number of NTP servers
 const uint8_t MAX_RULE_MEMS = 16;           // Max number of saved vars
 const uint8_t MAX_FRIENDLYNAMES = 8;        // Max number of Friendly names
-const uint8_t MAX_BUTTON_TEXT = 16;         // Max number of GUI button labels
+const uint8_t MAX_BUTTON_TEXT = 32;         // Max number of GUI button labels
 const uint8_t MAX_GROUP_TOPICS = 4;         // Max number of Group Topics
 const uint8_t MAX_DEV_GROUP_NAMES = 4;      // Max number of Device Group names
 
@@ -141,11 +133,17 @@ const uint8_t MAX_ADCS = 1;                 // Max number of ESP8266 ADC pins
 const uint8_t MAX_SWITCHES_TXT = 8;         // Max number of switches user text
 #endif  // ESP8266
 #ifdef ESP32
-const uint8_t MAX_ADCS = 8;                 // Max number of ESP32 ADC pins (ADC2 pins are unusable with Wifi enabled)
+  #if CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3
+  const uint8_t MAX_ADCS = 5;               // Max number of ESP32-C3 ADC pins (ADC2 pins are unusable with Wifi enabled)
+  #elif CONFIG_IDF_TARGET_ESP32C6
+  const uint8_t MAX_ADCS = 7;               // Max number of ESP32 ADC pins (ADC2 pins are unusable with Wifi enabled)
+  #else   // ESP32
+  const uint8_t MAX_ADCS = 8;               // Max number of ESP32 ADC pins (ADC2 pins are unusable with Wifi enabled)
+  #endif  // ESP32C3
 const uint8_t MAX_SWITCHES_TXT = 28;        // Max number of switches user text
 #endif  // ESP32
 
-const uint8_t MAX_HUE_DEVICES = 15;         // Max number of Philips Hue device per emulation
+const uint8_t MAX_HUE_DEVICES = 32;         // Max number of Philips Hue device per emulation
 const uint8_t MAX_ROTARIES = 2;             // Max number of Rotary Encoders
 
 const char MQTT_TOKEN_PREFIX[] PROGMEM = "%prefix%";  // To be substituted by mqtt_prefix[x]
@@ -203,14 +201,13 @@ const uint16_t MAX_INPUT_BUFFER_SIZE = 2048; // Max number of characters in Ardu
 const uint16_t FLOATSZ = 16;                // Max number of characters in float result from dtostrfd (max 32)
 const uint16_t CMDSZ = 24;                  // Max number of characters in command
 const uint16_t TOPSZ = 151;                 // Max number of characters in topic string
-const uint16_t GUISZ = 300;                 // Max number of characters in WebEnergyFormat string
 
 #ifdef ESP8266
-#ifdef PIO_FRAMEWORK_ARDUINO_MMU_CACHE16_IRAM48_SECHEAP_SHARED
-const uint16_t LOG_BUFFER_SIZE = 6096;      // Max number of characters in logbuffer used by weblog, syslog and mqttlog
-#else
-const uint16_t LOG_BUFFER_SIZE = 4096;      // Max number of characters in logbuffer used by weblog, syslog and mqttlog
-#endif  // PIO_FRAMEWORK_ARDUINO_MMU_CACHE16_IRAM48_SECHEAP_SHARED
+  #ifdef PIO_FRAMEWORK_ARDUINO_MMU_CACHE16_IRAM48_SECHEAP_SHARED
+  const uint16_t LOG_BUFFER_SIZE = 6096;      // Max number of characters in logbuffer used by weblog, syslog and mqttlog
+  #else
+  const uint16_t LOG_BUFFER_SIZE = 4096;      // Max number of characters in logbuffer used by weblog, syslog and mqttlog
+  #endif  // PIO_FRAMEWORK_ARDUINO_MMU_CACHE16_IRAM48_SECHEAP_SHARED
 #else   // Not ESP8266
 const uint16_t LOG_BUFFER_SIZE = 6096;      // Max number of characters in logbuffer used by weblog, syslog and mqttlog
 #endif  // ESP8266
@@ -304,6 +301,46 @@ const uint32_t LOOP_SLEEP_DELAY = 50;       // Lowest number of milliseconds to 
 #define XPT2046_MINY			346
 #define	XPT2046_MAXY			3870
 
+#ifdef ESP32
+  #if CONFIG_IDF_TARGET_ESP32S2
+    #define MAX_TX_PWR_DBM_11b    195
+    #define MAX_TX_PWR_DBM_54g    150
+    #define MAX_TX_PWR_DBM_n      130
+    #define WIFI_SENSITIVITY_11b  -880
+    #define WIFI_SENSITIVITY_54g  -750
+    #define WIFI_SENSITIVITY_n    -720
+  #elif CONFIG_IDF_TARGET_ESP32S3
+    #define MAX_TX_PWR_DBM_11b    210
+    #define MAX_TX_PWR_DBM_54g    190
+    #define MAX_TX_PWR_DBM_n      185
+    #define WIFI_SENSITIVITY_11b  -880
+    #define WIFI_SENSITIVITY_54g  -760
+    #define WIFI_SENSITIVITY_n    -720
+  #elif CONFIG_IDF_TARGET_ESP32C2 || CONFIG_IDF_TARGET_ESP32C3
+    #define MAX_TX_PWR_DBM_11b    210
+    #define MAX_TX_PWR_DBM_54g    190
+    #define MAX_TX_PWR_DBM_n      185
+    #define WIFI_SENSITIVITY_11b  -880
+    #define WIFI_SENSITIVITY_54g  -760
+    #define WIFI_SENSITIVITY_n    -730
+  #else
+    #define MAX_TX_PWR_DBM_11b    195
+    #define MAX_TX_PWR_DBM_54g    160
+    #define MAX_TX_PWR_DBM_n      140
+    #define WIFI_SENSITIVITY_11b  -880
+    #define WIFI_SENSITIVITY_54g  -750
+    #define WIFI_SENSITIVITY_n    -700
+  #endif
+#endif
+#ifdef ESP8266
+  #define MAX_TX_PWR_DBM_11b    200
+  #define MAX_TX_PWR_DBM_54g    170
+  #define MAX_TX_PWR_DBM_n      140
+  #define WIFI_SENSITIVITY_11b  -910
+  #define WIFI_SENSITIVITY_54g  -750
+  #define WIFI_SENSITIVITY_n    -720
+#endif
+
 /*********************************************************************************************\
  * Enumeration
 \*********************************************************************************************/
@@ -312,7 +349,7 @@ enum WeekInMonthOptions {Last, First, Second, Third, Fourth};
 enum DayOfTheWeekOptions {Sun=1, Mon, Tue, Wed, Thu, Fri, Sat};
 enum MonthNamesOptions {Jan=1, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec};
 enum HemisphereOptions {North, South};
-enum GetDateAndTimeOptions { DT_LOCAL, DT_UTC, DT_LOCALNOTZ, DT_DST, DT_STD, DT_RESTART, DT_ENERGY, DT_BOOTCOUNT, DT_LOCAL_MILLIS };
+enum GetDateAndTimeOptions { DT_LOCAL, DT_UTC, DT_LOCALNOTZ, DT_DST, DT_STD, DT_RESTART, DT_BOOTCOUNT, DT_LOCAL_MILLIS };
 
 enum LoggingLevels {LOG_LEVEL_NONE, LOG_LEVEL_ERROR, LOG_LEVEL_INFO, LOG_LEVEL_DEBUG, LOG_LEVEL_DEBUG_MORE};
 
@@ -322,8 +359,17 @@ enum WifiConfigOptions {WIFI_RESTART, EX_WIFI_SMARTCONFIG, WIFI_MANAGER, EX_WIFI
 
 enum WifiTestOptions {WIFI_NOT_TESTING, WIFI_TESTING, WIFI_TEST_FINISHED, WIFI_TEST_FINISHED_BAD};
 
-enum SwitchModeOptions {TOGGLE, FOLLOW, FOLLOW_INV, PUSHBUTTON, PUSHBUTTON_INV, PUSHBUTTONHOLD, PUSHBUTTONHOLD_INV, PUSHBUTTON_TOGGLE, TOGGLEMULTI,
-                        FOLLOWMULTI, FOLLOWMULTI_INV, PUSHHOLDMULTI, PUSHHOLDMULTI_INV, PUSHON, PUSHON_INV, PUSH_IGNORE, MAX_SWITCH_OPTION};
+enum SwitchModeOptions {TOGGLE,                              // 0
+                        FOLLOW, FOLLOW_INV,                  // 1, 2   - Follow switch state
+                        PUSHBUTTON, PUSHBUTTON_INV,          // 3, 4   - Pushbutton (default 1, 0 = toggle)
+                        PUSHBUTTONHOLD, PUSHBUTTONHOLD_INV,  // 5, 6   - Pushbutton with hold (default 1, 0 = toggle, Hold = hold)
+                        PUSHBUTTON_TOGGLE,                   // 7      - = 0
+                        TOGGLEMULTI,                         // 8      - = 0 with multi toggle
+                        FOLLOWMULTI, FOLLOWMULTI_INV,        // 9, 10  - Multi change follow (0 = off, 1 = on, 2x change = hold)
+                        PUSHHOLDMULTI, PUSHHOLDMULTI_INV,    // 11, 12 - Pushbutton with dimmer mode
+                        PUSHON, PUSHON_INV,                  // 13, 14 - Pushon mode (1 = on, switch off using PulseTime)
+                        PUSH_IGNORE, PUSH_IGNORE_INV,        // 15, 16 - Send only MQTT message on switch change
+                        MAX_SWITCH_OPTION};
 
 enum LedStateOptions {LED_OFF, LED_POWER, LED_MQTTSUB, LED_POWER_MQTTSUB, LED_MQTTPUB, LED_POWER_MQTTPUB, LED_MQTT, LED_POWER_MQTT, MAX_LED_OPTION};
 
@@ -350,7 +396,7 @@ enum Shortcuts { SC_CLEAR, SC_DEFAULT, SC_USER };
 enum SO32_49Index { P_HOLD_TIME,              // SetOption32 - (Button/Switch) Key hold time detection in decaseconds (default 40)
                     P_MAX_POWER_RETRY,        // SetOption33 - (Energy) Maximum number of retries before deciding power limit overflow (default 5)
                     P_BACKLOG_DELAY,          // SetOption34 - (Backlog) Minimal delay in milliseconds between executing backlog commands (default 200)
-                    P_MDNS_DELAYED_START,     // SetOption35 - (mDNS) Number of seconds before mDNS is started (default 0) - Obsolete
+                    P_SERIAL_SKIP,            // SetOption35 - (SerialBridge) Skip number of serial messages received (default 0)
                     P_BOOT_LOOP_OFFSET,       // SetOption36 - (Restart) Number of restarts to start detecting boot loop (default 1)
                     P_RGB_REMAP,              // SetOption37 - (Light) RGB and White channel separation (default 0)
                     P_IR_UNKNOW_THRESHOLD,    // SetOption38 - (IR) Set the smallest sized "UNKNOWN" message packets we actually care about (default 6, max 255)
@@ -362,8 +408,8 @@ enum SO32_49Index { P_HOLD_TIME,              // SetOption32 - (Button/Switch) K
                     P_IR_TOLERANCE,           // SetOption44 - (IR) Base tolerance percentage for matching incoming IR messages (default 25, max 100)
                     P_BISTABLE_PULSE,         // SetOption45 - (Bistable) Pulse time for two coil bistable latching relays (default 40)
                     P_POWER_ON_DELAY,         // SetOption46 - (PowerOn) Add delay of 10 x value milliseconds at power on
-                    P_SO47_FREE,              // SetOption47
-                    P_SO48_FREE,              // SetOption48
+                    P_POWER_ON_DELAY2,        // SetOption47 - (PowerOn) Add delay of value seconds at power on before activating relays
+                    P_DUMMY_RELAYS,           // SetOption48 - (Energy) Support energy dummy relays
                     P_SO49_FREE               // SetOption49
                   };  // Max is PARAM8_SIZE (18) - SetOption32 until SetOption49
 
@@ -377,17 +423,27 @@ enum LightSubtypes { LST_NONE, LST_SINGLE, LST_COLDWARM, LST_RGB,   LST_RGBW, LS
 enum LightTypes    { LT_BASIC, LT_PWM1,    LT_PWM2,      LT_PWM3,   LT_PWM4,  LT_PWM5,  LT_PWM6, LT_PWM7,
                      LT_NU8,   LT_SERIAL1, LT_SERIAL2,   LT_RGB,    LT_RGBW,  LT_RGBWC, LT_NU14, LT_NU15 };  // Do not insert new fields
 
-enum XsnsFunctions {FUNC_SETTINGS_OVERRIDE, FUNC_PIN_STATE, FUNC_I2C_INIT, FUNC_MODULE_INIT, FUNC_PRE_INIT, FUNC_INIT,
-                    FUNC_LOOP, FUNC_EVERY_50_MSECOND, FUNC_EVERY_100_MSECOND, FUNC_EVERY_200_MSECOND, FUNC_EVERY_250_MSECOND, FUNC_EVERY_SECOND,
-                    FUNC_SAVE_SETTINGS, FUNC_SAVE_AT_MIDNIGHT, FUNC_SAVE_BEFORE_RESTART,
-                    FUNC_AFTER_TELEPERIOD, FUNC_JSON_APPEND, FUNC_WEB_SENSOR, FUNC_WEB_COL_SENSOR, FUNC_COMMAND, FUNC_COMMAND_SENSOR, FUNC_COMMAND_DRIVER,
-                    FUNC_MQTT_SUBSCRIBE, FUNC_MQTT_INIT, FUNC_MQTT_DATA,
-                    FUNC_SET_POWER, FUNC_SET_DEVICE_POWER, FUNC_SHOW_SENSOR, FUNC_ANY_KEY,
-                    FUNC_ENERGY_EVERY_SECOND, FUNC_ENERGY_RESET,
-                    FUNC_RULES_PROCESS, FUNC_TELEPERIOD_RULES_PROCESS, FUNC_SERIAL, FUNC_FREE_MEM, FUNC_BUTTON_PRESSED, FUNC_BUTTON_MULTI_PRESSED,
-                    FUNC_WEB_ADD_BUTTON, FUNC_WEB_ADD_CONSOLE_BUTTON, FUNC_WEB_ADD_MANAGEMENT_BUTTON, FUNC_WEB_ADD_MAIN_BUTTON,
-                    FUNC_WEB_GET_ARG, FUNC_WEB_ADD_HANDLER, FUNC_SET_CHANNELS, FUNC_SET_SCHEME, FUNC_HOTPLUG_SCAN, FUNC_TIME_SYNCED,
-                    FUNC_DEVICE_GROUP_ITEM };
+enum XsnsFunctions { FUNC_SETTINGS_OVERRIDE, FUNC_SETUP_RING1, FUNC_SETUP_RING2, FUNC_PRE_INIT, FUNC_INIT,
+                     FUNC_LOOP, FUNC_SLEEP_LOOP, FUNC_EVERY_50_MSECOND, FUNC_EVERY_100_MSECOND, FUNC_EVERY_200_MSECOND, FUNC_EVERY_250_MSECOND, FUNC_EVERY_SECOND,
+                     FUNC_RESET_SETTINGS, FUNC_RESTORE_SETTINGS, FUNC_SAVE_SETTINGS, FUNC_SAVE_AT_MIDNIGHT, FUNC_SAVE_BEFORE_RESTART, FUNC_INTERRUPT_STOP, FUNC_INTERRUPT_START,
+                     FUNC_AFTER_TELEPERIOD, FUNC_JSON_APPEND, FUNC_WEB_SENSOR, FUNC_WEB_COL_SENSOR,
+                     FUNC_MQTT_SUBSCRIBE, FUNC_MQTT_INIT,
+                     FUNC_SET_POWER, FUNC_SHOW_SENSOR, FUNC_ANY_KEY, FUNC_LED_LINK,
+                     FUNC_ENERGY_EVERY_SECOND, FUNC_ENERGY_RESET,
+                     FUNC_TELEPERIOD_RULES_PROCESS, FUNC_FREE_MEM,
+                     FUNC_WEB_ADD_BUTTON, FUNC_WEB_ADD_CONSOLE_BUTTON, FUNC_WEB_ADD_MANAGEMENT_BUTTON, FUNC_WEB_ADD_MAIN_BUTTON,
+                     FUNC_WEB_GET_ARG, FUNC_WEB_ADD_HANDLER, FUNC_SET_SCHEME, FUNC_HOTPLUG_SCAN, FUNC_TIME_SYNCED,
+                     FUNC_DEVICE_GROUP_ITEM,
+                     FUNC_NETWORK_UP, FUNC_NETWORK_DOWN,
+                     FUNC_return_result = 200,  // Insert function WITHOUT return results before here. Following functions return results
+                     FUNC_PIN_STATE, FUNC_MODULE_INIT, FUNC_ADD_BUTTON, FUNC_ADD_SWITCH, FUNC_BUTTON_PRESSED, FUNC_BUTTON_MULTI_PRESSED,
+                     FUNC_SET_DEVICE_POWER,
+                     FUNC_MQTT_DATA, FUNC_SERIAL,
+                     FUNC_COMMAND, FUNC_COMMAND_SENSOR, FUNC_COMMAND_DRIVER,
+                     FUNC_RULES_PROCESS,
+                     FUNC_SET_CHANNELS,
+                     FUNC_last_function         // Insert functions WITH return results before here
+                     };
 
 enum AddressConfigSteps { ADDR_IDLE, ADDR_RECEIVE, ADDR_SEND };
 
@@ -428,7 +484,12 @@ enum SettingsTextIndex { SET_OTAURL,
                          SET_SHD_PARAM,
                          SET_RGX_SSID, SET_RGX_PASSWORD,
                          SET_INFLUXDB_HOST, SET_INFLUXDB_PORT, SET_INFLUXDB_ORG, SET_INFLUXDB_TOKEN, SET_INFLUXDB_BUCKET, SET_INFLUXDB_RP,
-                         SET_MAX };
+                         SET_MAX, // limit of texts stored in Settings
+                         // Index above are not stored in Settings and should be handled specifically in SettingText()
+                         SET_BUTTON17, SET_BUTTON18, SET_BUTTON19, SET_BUTTON20, SET_BUTTON21, SET_BUTTON22, SET_BUTTON23, SET_BUTTON24,
+                         SET_BUTTON25, SET_BUTTON26, SET_BUTTON27, SET_BUTTON28, SET_BUTTON29, SET_BUTTON30, SET_BUTTON31, SET_BUTTON32,
+                         SET_FINAL_MAX
+                         };
 
 enum SpiInterfaces { SPI_NONE, SPI_MOSI, SPI_MISO, SPI_MOSI_MISO };
 
@@ -459,10 +520,10 @@ enum DevGroupShareItem { DGR_SHARE_POWER = 1, DGR_SHARE_LIGHT_BRI = 2, DGR_SHARE
 
 enum CommandSource { SRC_IGNORE, SRC_MQTT, SRC_RESTART, SRC_BUTTON, SRC_SWITCH, SRC_BACKLOG, SRC_SERIAL, SRC_WEBGUI, SRC_WEBCOMMAND, SRC_WEBCONSOLE, SRC_PULSETIMER,
                      SRC_TIMER, SRC_RULE, SRC_MAXPOWER, SRC_MAXENERGY, SRC_OVERTEMP, SRC_LIGHT, SRC_KNX, SRC_DISPLAY, SRC_WEMO, SRC_HUE, SRC_RETRY, SRC_REMOTE, SRC_SHUTTER,
-                     SRC_THERMOSTAT, SRC_CHAT, SRC_TCL, SRC_BERRY, SRC_FILE, SRC_SSERIAL, SRC_USBCONSOLE, SRC_MAX };
+                     SRC_THERMOSTAT, SRC_CHAT, SRC_TCL, SRC_BERRY, SRC_FILE, SRC_SSERIAL, SRC_USBCONSOLE, SRC_SO47, SRC_SENSOR, SRC_MAX };
 const char kCommandSource[] PROGMEM = "I|MQTT|Restart|Button|Switch|Backlog|Serial|WebGui|WebCommand|WebConsole|PulseTimer|"
                                       "Timer|Rule|MaxPower|MaxEnergy|Overtemp|Light|Knx|Display|Wemo|Hue|Retry|Remote|Shutter|"
-                                      "Thermostat|Chat|TCL|Berry|File|SSerial|UsbConsole";
+                                      "Thermostat|Chat|TCL|Berry|File|SSerial|UsbConsole|SO47|Sensor";
 
 const uint8_t kDefaultRfCode[9] PROGMEM = { 0x21, 0x16, 0x01, 0x0E, 0x03, 0x48, 0x2E, 0x1A, 0x00 };
 

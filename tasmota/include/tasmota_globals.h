@@ -45,6 +45,7 @@ extern "C" void custom_crash_callback(struct rst_info * rst_info, uint32_t stack
 extern "C" void resetPins();
 extern "C" int startWaveformClockCycles(uint8_t pin, uint32_t highCcys, uint32_t lowCcys,
   uint32_t runTimeCcys, int8_t alignPhase, uint32_t phaseOffsetCcys, bool autoPwm);
+extern "C" void setTimer1Callback(uint32_t (*fn)());
 #ifdef USE_SERIAL_BRIDGE
 void SerialBridgePrintf(PGM_P formatP, ...);
 #endif
@@ -67,6 +68,25 @@ String EthernetMacAddress(void);
 \*********************************************************************************************/
 
 #include "include/tasmota_configurations.h"            // Preconfigured configurations
+
+/*-------------------------------------------------------------------------------------------*\
+ * ESP8266 and ESP32 build time definitions
+\*-------------------------------------------------------------------------------------------*/
+
+// created in pio-tools/pre_source_dir.py
+#if defined(CONFIG_TASMOTA_FLASHMODE_OPI)
+  #define D_TASMOTA_FLASHMODE "OPI"
+#elif (CONFIG_TASMOTA_FLASHMODE_QIO)
+  #define D_TASMOTA_FLASHMODE "QIO"
+#elif defined(CONFIG_TASMOTA_FLASHMODE_QOUT)
+   #define D_TASMOTA_FLASHMODE "QOUT"
+#elif defined(CONFIG_TASMOTA_FLASHMODE_DIO)
+  #define D_TASMOTA_FLASHMODE "DIO"
+#elif defined(CONFIG_TASMOTA_FLASHMODE_DOUT)
+  #define D_TASMOTA_FLASHMODE "DOUT"
+#else
+#error "Please add missing flashmode definition in the lines above!" // could be upcoming octal modes
+#endif // value check of CONFIG_TASMOTA_FLASHMODE
 
 /*********************************************************************************************\
  * ESP8266 specific parameters
@@ -117,16 +137,17 @@ String EthernetMacAddress(void);
 /*-------------------------------------------------------------------------------------------*\
  * End ESP32 specific parameters
 \*-------------------------------------------------------------------------------------------*/
+
 /*-------------------------------------------------------------------------------------------*\
- * Start ESP32-C32 specific parameters - disable features not present in ESP32-C3
+ * Start ESP32-C3/C6 specific parameters - disable features not present in ESP32-C3/C6
 \*-------------------------------------------------------------------------------------------*/
 
-#if CONFIG_IDF_TARGET_ESP32C3                      // ESP32-C3
+#if CONFIG_IDF_TARGET_ESP32C3 || CONFIG_IDF_TARGET_ESP32C6  // ESP32-C3/C6
 //#ifdef USE_ETHERNET
-//#undef USE_ETHERNET                                // ESP32-C3 does not support ethernet
+//#undef USE_ETHERNET                                // ESP32-C3/C6 does not support ethernet
 //#endif
 
-#endif  // CONFIG_IDF_TARGET_ESP32C3
+#endif  // CONFIG_IDF_TARGET_ESP32C3/C6
 
 /*-------------------------------------------------------------------------------------------*\
  * End ESP32-C3 specific parameters
@@ -284,7 +305,7 @@ String EthernetMacAddress(void);
 #ifndef MQTT_CLEAN_SESSION
 #define MQTT_CLEAN_SESSION          1          // 0 = No clean session, 1 = Clean session (default)
 #endif
-#ifndef MQTT_DISABLE_SSERIALRECEIVED        
+#ifndef MQTT_DISABLE_SSERIALRECEIVED
 #define MQTT_DISABLE_SSERIALRECEIVED 0         // 1 = Disable sserialreceived mqtt messages, 0 = Enable sserialreceived mqtt messages (default)
 #endif
 #ifndef MQTT_LWT_OFFLINE
