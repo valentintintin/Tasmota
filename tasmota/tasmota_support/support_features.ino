@@ -173,7 +173,7 @@ constexpr uint32_t feature[] = {
   0x00010000 |  // xdrv_17_rcswitch.ino
 #endif
 #ifdef USE_DIO_REMOTE
-    feature2 |= 0x00010000;  // xdrv_200_dioremote.ino
+    0x00010000 |  // xdrv_200_dioremote.ino
 #endif
 #if defined(USE_LIGHT) && defined(USE_ARMTRONIX_DIMMERS)
   0x00020000 |  // xdrv_18_armtronixdimmer.ino
